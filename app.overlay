@@ -1,0 +1,51 @@
+/* app.overlay */
+
+&pinctrl {
+    pinmux_flexpwm0_pwm0: pinmux_flexpwm0_pwm0 {
+        group0 {
+            pinmux = <PWM0_A0_P3_6>,
+                     <PWM0_B0_P3_7>;
+            slew-rate = "fast";
+            drive-strength = "low";
+        };
+    };
+
+    /* Group for PWM pins P3_8 and P3_9 */
+    pinmux_flexpwm0_pwm1: pinmux_flexpwm0_pwm1 {
+        group0 {
+            pinmux = <PWM0_A1_P3_8>,
+                     <PWM0_B1_P3_9>;
+            slew-rate = "fast";
+            drive-strength = "low";
+        };
+    };
+
+    pinmux_flexpwm0_pwm2: pinmux_flexpwm0_pwm2 {
+        group0 {
+            pinmux = <PWM0_A2_P3_10>,
+                     <PWM0_B2_P3_11>;
+            slew-rate = "fast";
+            drive-strength = "low";
+        };
+    };
+};
+
+/* Now, just enable the flexpwm peripheral.
+   The driver will find the pinmux groups above by their names. */
+&flexpwm0_pwm0 {
+    status = "okay";
+    pinctrl-0 = <&pinmux_flexpwm0_pwm0>;
+    pinctrl-names = "default";
+};
+
+&flexpwm0_pwm1 {
+    status = "okay";
+    pinctrl-0 = <&pinmux_flexpwm0_pwm1>;
+    pinctrl-names = "default";
+};
+
+&flexpwm0_pwm2 {
+    status = "okay";
+    pinctrl-0 = <&pinmux_flexpwm0_pwm2>;
+    pinctrl-names = "default";
+};

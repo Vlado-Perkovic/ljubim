@@ -1,0 +1,17 @@
+sample:
+  description: lose (jako) upravljanje beskolektorskim istosmjernim motorom
+  name: ljubim
+common:
+  min_ram: 2
+  min_flash: 16
+  tags: bldc
+  integration_platforms:
+    - native_sim
+  harness: console
+  harness_config:
+    type: one_line
+    regex:
+      - "Hello World! (.*)"
+tests:
+  sample.basic.helloworld:
+    tags: introduction
