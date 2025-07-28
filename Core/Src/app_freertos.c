@@ -714,8 +714,9 @@ void motor_control_task(void *argument) {
       //   // phase_jump_step = step_counter;
       // }
       if (open_loop_period_us > 1850) { // Ramp until we reach 1ms period
-        if (duty_cycle < 11 && (step_counter > 5 && step_counter < 80)) { // Ramp until we reach 1ms period
-          duty_cycle += (80 - step_counter) * 0.004;
+        if (duty_cycle < 11 && (step_counter > 8 && step_counter < 80)) { // Ramp until we reach 1ms period
+          // duty_cycle += (80 - step_counter) * 0.01;
+          duty_cycle = 6;
         }
         open_loop_period_us = step_times_us[step_counter - 3];
         set_commutation_period_us_63(open_loop_period_us);
