@@ -44,8 +44,8 @@
 /* USER CODE BEGIN PM */
 const uint32_t step_times_us[] = {
     /*34500*/ 17250,    
-  // 7000,
-  14291,
+  7000,
+  // 14291,
   10966,    9244,    8144,    7363,    6771,    6302,
     5919,    5599,    5325,    5088,    4880,    4696,    4531,    4382,
     4247,    4124,    4011,    3907,    3810,    3721,    3637,    3559,
@@ -679,6 +679,7 @@ void motor_control_task(void *argument) {
   set_commutation_period_us_255(open_loop_period_us);
   HAL_TIM_Base_Start_IT(&htim3);
   float duty_cycle = 10;
+  int cnt = 0;
 
   for (;;) {
     // Wait here indefinitely for a notification from the timer ISR
@@ -714,13 +715,38 @@ void motor_control_task(void *argument) {
       //   // phase_jump_step = step_counter;
       // }
       if (open_loop_period_us > 1850) { // Ramp until we reach 1ms period
-        if (duty_cycle < 11 && (step_counter > 8 && step_counter < 80)) { // Ramp until we reach 1ms period
+        if (duty_cycle < 12 && (step_counter > 5 && step_counter < 10)) { // Ramp until we reach 1ms period
           // duty_cycle += (80 - step_counter) * 0.01;
-          duty_cycle = 6;
+          // duty_cycle = 6;
+          duty_cycle += 1;
+        }
+        if (duty_cycle < 12 && (step_counter > 50 && step_counter < 60)) { // Ramp until we reach 1ms period
+          // duty_cycle += (80 - step_counter) * 0.01;
+          // duty_cycle = 6;
+          duty_cycle += 1;
         }
         open_loop_period_us = step_times_us[step_counter - 3];
         set_commutation_period_us_63(open_loop_period_us);
         phase_jump_step = step_counter;
+      }
+      else {
+        // ZLATO
+        // if (step_counter % 12 == 0 && cnt < 30) {
+        // duty_cycle -= 0.05;
+        // set_commutation_period_us_63(open_loop_period_us/2);
+        // cnt++;
+        // }
+        // else {
+        // set_commutation_period_us_63(open_loop_period_us);
+        // }
+        if (step_counter % 12 == 0 && cnt < 30) {
+        duty_cycle -= 0.05;
+        set_commutation_period_us_63(open_loop_period_us/2);
+        cnt++;
+        }
+        else {
+        set_commutation_period_us_63(open_loop_period_us);
+        }
       }
       // } else {
       //   // duty_cycle = 10;
