@@ -714,13 +714,34 @@ void motor_control_task(void *argument) {
       //   set_commutation_period_us(open_loop_period_us);
       //   // phase_jump_step = step_counter;
       // }
-      if (open_loop_period_us > 1850) { // Ramp until we reach 1ms period
-        if (duty_cycle < 12 && (step_counter > 5 && step_counter < 10)) { // Ramp until we reach 1ms period
+      // if (open_loop_period_us > 1850) { // Ramp until we reach 1ms period
+      //   if (duty_cycle < 12 && (step_counter > 5 && step_counter < 10)) { // Ramp until we reach 1ms period
+      //     // duty_cycle += (80 - step_counter) * 0.01;
+      //     // duty_cycle = 6;
+      //     duty_cycle += 1;
+      //   }
+      //   if (duty_cycle < 12 && (step_counter > 50 && step_counter < 60)) { // Ramp until we reach 1ms period
+      //     // duty_cycle += (80 - step_counter) * 0.01;
+      //     // duty_cycle = 6;
+      //     duty_cycle += 1;
+      //   }
+      //   open_loop_period_us = step_times_us[step_counter - 3];
+      //   set_commutation_period_us_63(open_loop_period_us);
+      //   phase_jump_step = step_counter;
+      // }
+      // if (open_loop_period_us > 1850) { // Ramp until we reach 1ms period
+      if (open_loop_period_us > 1428) { // Ramp until we reach 1ms period
+        if (duty_cycle < 14 && (step_counter > 5 && step_counter < 10)) { // Ramp until we reach 1ms period
           // duty_cycle += (80 - step_counter) * 0.01;
           // duty_cycle = 6;
           duty_cycle += 1;
         }
-        if (duty_cycle < 12 && (step_counter > 50 && step_counter < 60)) { // Ramp until we reach 1ms period
+        if (duty_cycle < 14 && (step_counter > 50 && step_counter < 60)) { // Ramp until we reach 1ms period
+          // duty_cycle += (80 - step_counter) * 0.01;
+          // duty_cycle = 6;
+          duty_cycle += 0.75;
+        }
+        if (duty_cycle < 15 && (step_counter > 120 && step_counter < 140)) { // Ramp until we reach 1ms period
           // duty_cycle += (80 - step_counter) * 0.01;
           // duty_cycle = 6;
           duty_cycle += 1;
@@ -739,8 +760,8 @@ void motor_control_task(void *argument) {
         // else {
         // set_commutation_period_us_63(open_loop_period_us);
         // }
-        if (step_counter % 12 == 0 && cnt < 30) {
-        duty_cycle -= 0.05;
+        if (step_counter % 12 == 0 && cnt < 7) {
+        duty_cycle -= 0.02;
         set_commutation_period_us_63(open_loop_period_us/2);
         cnt++;
         }
