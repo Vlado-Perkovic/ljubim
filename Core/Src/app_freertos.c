@@ -564,7 +564,7 @@ void motor_control_task(void *argument) {
       //   phase_jump_step = step_counter;
       // }
       // if (open_loop_period_us > 1850) { // Ramp until we reach 1ms period
-      if (open_loop_period_us > 1101) { // Ramp until we reach 1ms period
+      if (open_loop_period_us > 1101 && go == 0) { // Ramp until we reach 1ms period 
         if (duty_cycle < 14 &&
             (step_counter > 5 &&
              step_counter < 10)) { // Ramp until we reach 1ms period
@@ -595,6 +595,8 @@ void motor_control_task(void *argument) {
         }
         open_loop_period_us = step_times_us[step_counter - 3];
         set_commutation_period_us_63(open_loop_period_us);
+        // if (open_loop_period_us <= 1101) 
+        // go = 1;
         continue;
       }
 
@@ -625,6 +627,10 @@ void motor_control_task(void *argument) {
       } else {
         go = 1;
       }
+
+      if (step_counter == 2000) duty_cycle += 2;
+      // if (step_counter == 3000) duty_cycle += 5;
+
     }
   }
 }
