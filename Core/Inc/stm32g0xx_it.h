@@ -48,7 +48,10 @@ extern "C" {
 /* Exported functions prototypes ---------------------------------------------*/
 void NMI_Handler(void);
 void HardFault_Handler(void);
+void TIM1_BRK_UP_TRG_COM_IRQHandler(void);
+void TIM1_CC_IRQHandler(void);
 void TIM3_IRQHandler(void);
+void TIM15_IRQHandler(void);
 void TIM16_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 

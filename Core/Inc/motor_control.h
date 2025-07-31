@@ -4,7 +4,7 @@
 #include "stdint.h"
 
 typedef enum {
-  MOTOR_STEP_1, // A->B
+  MOTOR_STEP_1, // A->B ----- C 
   MOTOR_STEP_2, // A->C
   MOTOR_STEP_3, // B->C
   MOTOR_STEP_4, // B->A
@@ -13,6 +13,13 @@ typedef enum {
   MOTOR_STEP_COUNT,
   MOTOR_STOP
 } motor_step_t;
+
+typedef enum {
+  SOURCE_NONE,
+  SOURCE_MOTOR_PHASE_A,
+  SOURCE_MOTOR_PHASE_B,
+  SOURCE_MOTOR_PHASE_C,
+} OneShotSource_t;
 
 void motor_init(void);
 void motor_align(void);

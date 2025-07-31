@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -26,7 +26,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "motor_control.h"
+#include <stdint.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,7 +47,9 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+extern uint32_t open_loop_period_us;
+extern volatile motor_step_t current_motor_step;
+extern volatile uint8_t go;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -60,10 +63,13 @@ void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN 0 */
 extern osThreadId_t motor_control_hndl;
 extern TIM_HandleTypeDef htim3;
+extern volatile OneShotSource_t g_one_shot_source;
+extern volatile GPIO_PinState cmp1, cmp2, cmp3;
+volatile GPIO_PinState old_cmp1, old_cmp2, old_cmp3;
+volatile uint8_t safeguard = 0;
 
-int _write(int file, char *ptr, int len)
-{
-  HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+int _write(int file, char *ptr, int len) {
+  HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, HAL_MAX_DELAY);
   return len;
 }
 /* USER CODE END 0 */
@@ -101,6 +107,8 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM3_Init();
   MX_COMP1_Init();
+  MX_TIM17_Init();
+  MX_TIM15_Init();
   /* USER CODE BEGIN 2 */
   /* USER CODE END 2 */
 
@@ -117,8 +125,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+  while (1) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -187,6 +194,147 @@ void SystemClock_Config(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
+  if (htim->Instance == TIM1) {
+    // __HAL_TIM_SET_COUNTER(&htim17, 0);
+    //
+    // HAL_TIM_OnePulse_Start_IT(&htim17, TIM_CHANNEL_1);
+    HAL_TIM_Base_Stop_IT(&htim15);
+
+    // Reset the counter
+    __HAL_TIM_SET_COUNTER(&htim15, 0);
+
+    // Configure for one-shot mode
+    htim15.Instance->CR1 |= TIM_CR1_OPM; // One Pulse Mode
+
+    // Start timer with interrupt
+    HAL_TIM_Base_Start_IT(&htim15);
+    // case TIM_CHANNEL_1:
+    //   g_one_shot_source = SOURCE_MOTOR_PHASE_A;
+    //   break;
+    // case TIM_CHANNEL_2:
+    //   g_one_shot_source = SOURCE_MOTOR_PHASE_B;
+    //   HAL_TIM_OnePulse_Start_IT(&htim17, TIM_CHANNEL_1);
+    //   break;
+    // case TIM_CHANNEL_3:
+    //   g_one_shot_source = SOURCE_MOTOR_PHASE_C;
+    //   HAL_TIM_OnePulse_Start_IT(&htim17, TIM_CHANNEL_1);
+    //   break;
+    // default:
+    //   break;
+    // }
+  }
+  if (htim->Instance == TIM15 && go) {
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+    switch (current_motor_step) {
+    case MOTOR_STEP_1: // A->B, C is floating ---> down
+      cmp3 = -1;
+      old_cmp1 = cmp1;
+      cmp1 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
+      // cmp1 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
+      if (cmp1 == GPIO_PIN_RESET && old_cmp1 == GPIO_PIN_SET &&
+          safeguard == 0) {
+        int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
+        int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
+        open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+
+        __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        safeguard = 1;
+      }
+    // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
+      break;
+
+    case MOTOR_STEP_2: // A->C, B is floating ----> up
+      cmp1 = -1;
+      old_cmp2 = cmp2;
+      cmp2 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
+      if (cmp2 == GPIO_PIN_SET && old_cmp2 == GPIO_PIN_RESET &&
+          safeguard == 0) {
+        int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
+        int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
+        open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+
+        __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        safeguard = 1;
+      }
+    // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp2);
+      break;
+
+    case MOTOR_STEP_3: // B->C, A is floating -----> down
+      cmp2 = -1;
+      old_cmp3 = cmp3;
+      cmp3 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
+      if (cmp3 == GPIO_PIN_RESET && old_cmp3 == GPIO_PIN_SET &&
+          safeguard == 0) {
+        int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
+        int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
+        open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+
+        __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        safeguard = 1;
+      }
+      break;
+
+    case MOTOR_STEP_4: // B->A, C is floating ----> up
+      cmp3 = -1;
+      old_cmp1 = cmp1;
+      cmp1 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
+      if (cmp1 == GPIO_PIN_SET && old_cmp1 == GPIO_PIN_RESET &&
+          safeguard == 0) {
+        int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
+        int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
+        open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+
+        __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        safeguard = 1;
+      }
+    // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
+      break;
+
+    case MOTOR_STEP_5: // C->A, B is floating -----> down
+      cmp1 = -1;
+      old_cmp2 = cmp2;
+      cmp2 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
+      if (cmp2 == GPIO_PIN_RESET && old_cmp2 == GPIO_PIN_SET &&
+          safeguard == 0) {
+        int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
+        int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
+        open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
+
+        __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        safeguard = 1;
+      }
+    // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp2);
+      break;
+
+    case MOTOR_STEP_6: // C->B, A is floating ----> up
+      cmp2 = -1;
+      old_cmp3 = cmp3;
+      cmp3 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
+      if (cmp3 == GPIO_PIN_SET && old_cmp3 == GPIO_PIN_RESET &&
+          safeguard == 0) {
+        int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
+        int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+        open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+
+        __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        safeguard = 1;
+      }
+      break;
+
+    case MOTOR_STOP:
+    default:
+      break;
+    }
+  }
+
 
   /* USER CODE END Callback 0 */
   if (htim->Instance == TIM16)
@@ -199,7 +347,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     // Notify the motor control task that it is time to commutate
     if (motor_control_hndl != NULL) {
-      vTaskNotifyGiveFromISR((TaskHandle_t)motor_control_hndl, &xHigherPriorityTaskWoken);
+      vTaskNotifyGiveFromISR((TaskHandle_t)motor_control_hndl,
+                             &xHigherPriorityTaskWoken);
     }
 
     // If the notification woke up a higher-priority task, yield the CPU
@@ -218,8 +367,7 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
-  {
+  while (1) {
   }
   /* USER CODE END Error_Handler_Debug */
 }
@@ -235,8 +383,9 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* User can add his own implementation to report the file name and line
+     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
+     line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

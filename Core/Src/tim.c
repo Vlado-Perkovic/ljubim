@@ -26,6 +26,8 @@
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim15;
+TIM_HandleTypeDef htim17;
 
 /* TIM1 init function */
 void MX_TIM1_Init(void)
@@ -152,6 +154,78 @@ void MX_TIM3_Init(void)
   /* USER CODE END TIM3_Init 2 */
 
 }
+/* TIM15 init function */
+void MX_TIM15_Init(void)
+{
+
+  /* USER CODE BEGIN TIM15_Init 0 */
+
+  /* USER CODE END TIM15_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM15_Init 1 */
+
+  /* USER CODE END TIM15_Init 1 */
+  htim15.Instance = TIM15;
+  htim15.Init.Prescaler = 15;
+  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim15.Init.Period = 1;
+  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim15.Init.RepetitionCounter = 0;
+  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim15, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OnePulse_Init(&htim15, TIM_OPMODE_SINGLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM15_Init 2 */
+
+  /* USER CODE END TIM15_Init 2 */
+
+}
+/* TIM17 init function */
+void MX_TIM17_Init(void)
+{
+
+  /* USER CODE BEGIN TIM17_Init 0 */
+
+  /* USER CODE END TIM17_Init 0 */
+
+  /* USER CODE BEGIN TIM17_Init 1 */
+
+  /* USER CODE END TIM17_Init 1 */
+  htim17.Instance = TIM17;
+  htim17.Init.Prescaler = 0;
+  htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim17.Init.Period = 65535;
+  htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim17.Init.RepetitionCounter = 0;
+  htim17.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim17) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM17_Init 2 */
+
+  /* USER CODE END TIM17_Init 2 */
+
+}
 
 void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
 {
@@ -174,6 +248,12 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
 
     /* TIM1 clock enable */
     __HAL_RCC_TIM1_CLK_ENABLE();
+
+    /* TIM1 interrupt Init */
+    HAL_NVIC_SetPriority(TIM1_BRK_UP_TRG_COM_IRQn, 3, 0);
+    HAL_NVIC_EnableIRQ(TIM1_BRK_UP_TRG_COM_IRQn);
+    HAL_NVIC_SetPriority(TIM1_CC_IRQn, 3, 0);
+    HAL_NVIC_EnableIRQ(TIM1_CC_IRQn);
   /* USER CODE BEGIN TIM1_MspInit 1 */
 
   /* USER CODE END TIM1_MspInit 1 */
@@ -193,6 +273,43 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
   /* USER CODE BEGIN TIM3_MspInit 1 */
 
   /* USER CODE END TIM3_MspInit 1 */
+  }
+  else if(tim_baseHandle->Instance==TIM15)
+  {
+  /* USER CODE BEGIN TIM15_MspInit 0 */
+
+  /* USER CODE END TIM15_MspInit 0 */
+
+  /** Initializes the peripherals clocks
+  */
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_TIM15;
+    PeriphClkInit.Tim15ClockSelection = RCC_TIM15CLKSOURCE_PCLK1;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* TIM15 clock enable */
+    __HAL_RCC_TIM15_CLK_ENABLE();
+
+    /* TIM15 interrupt Init */
+    HAL_NVIC_SetPriority(TIM15_IRQn, 3, 0);
+    HAL_NVIC_EnableIRQ(TIM15_IRQn);
+  /* USER CODE BEGIN TIM15_MspInit 1 */
+
+  /* USER CODE END TIM15_MspInit 1 */
+  }
+  else if(tim_baseHandle->Instance==TIM17)
+  {
+  /* USER CODE BEGIN TIM17_MspInit 0 */
+
+  /* USER CODE END TIM17_MspInit 0 */
+
+    /* TIM17 clock enable */
+    __HAL_RCC_TIM17_CLK_ENABLE();
+  /* USER CODE BEGIN TIM17_MspInit 1 */
+
+  /* USER CODE END TIM17_MspInit 1 */
   }
 }
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
@@ -246,6 +363,10 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
   /* USER CODE END TIM1_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_TIM1_CLK_DISABLE();
+
+    /* TIM1 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(TIM1_BRK_UP_TRG_COM_IRQn);
+    HAL_NVIC_DisableIRQ(TIM1_CC_IRQn);
   /* USER CODE BEGIN TIM1_MspDeInit 1 */
 
   /* USER CODE END TIM1_MspDeInit 1 */
@@ -263,6 +384,31 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
   /* USER CODE BEGIN TIM3_MspDeInit 1 */
 
   /* USER CODE END TIM3_MspDeInit 1 */
+  }
+  else if(tim_baseHandle->Instance==TIM15)
+  {
+  /* USER CODE BEGIN TIM15_MspDeInit 0 */
+
+  /* USER CODE END TIM15_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM15_CLK_DISABLE();
+
+    /* TIM15 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(TIM15_IRQn);
+  /* USER CODE BEGIN TIM15_MspDeInit 1 */
+
+  /* USER CODE END TIM15_MspDeInit 1 */
+  }
+  else if(tim_baseHandle->Instance==TIM17)
+  {
+  /* USER CODE BEGIN TIM17_MspDeInit 0 */
+
+  /* USER CODE END TIM17_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM17_CLK_DISABLE();
+  /* USER CODE BEGIN TIM17_MspDeInit 1 */
+
+  /* USER CODE END TIM17_MspDeInit 1 */
   }
 }
 
