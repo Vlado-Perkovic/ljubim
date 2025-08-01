@@ -57,6 +57,7 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define ALIGN_TIMEOUT_US 196608
 #define MCO_Pin GPIO_PIN_0
 #define MCO_GPIO_Port GPIOF
 #define USART2_TX_Pin GPIO_PIN_2
