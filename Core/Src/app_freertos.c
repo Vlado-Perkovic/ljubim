@@ -500,9 +500,6 @@ void motor_control_task(void *argument) {
   // Initialize all motor peripherals
   motor_init();
 
-  // Force the rotor into a known starting position
-  // motor_align();
-
   // Start the commutation timer (e.g., TIM3) to begin generating interrupts
   // #FIX: this goes into shadow registers, since the timer is initialized to
   // max value, the first step lasts longer than the second
@@ -522,18 +519,12 @@ void motor_control_task(void *argument) {
         uint32_t err;
         switch (current_motor_step) {
         case MOTOR_STEP_1: // A->B, C is floating ---> down
-          // __HAL_TIM_SET_COUNTER(&htim3, open_loop_period_us/(2*4));
-          // open_loop_period_us = open_loop_period_us * 1.2;
           err = open_loop_period_us / 2;
           open_loop_period_us += err / 20;
           timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
-          // __HAL_TIM_SET_AUTORELOAD(htim, open_loop_period_us);
-        // set_commutation_period_us_63(open_loop_period_us);
           if (__HAL_TIM_GET_COUNTER(&htim3) + err / 2 >= open_loop_period_us) {
-            // __HAL_TIM_SET_COUNTER(htim, open_loop_period_us - 1);
               timer_set_counter(&htim3, open_loop_period_us-1);
           } else {
-            // __HAL_TIM_SET_COUNTER(htim, elapsed_cnt + err / 2);
               timer_set_counter(&htim3, err/2);
           }
 
@@ -543,13 +534,9 @@ void motor_control_task(void *argument) {
           err = open_loop_period_us / 2;
           open_loop_period_us -= err / 20;
           timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
-          // __HAL_TIM_SET_AUTORELOAD(htim, open_loop_period_us);
-        // set_commutation_period_us_63(open_loop_period_us);
           if (__HAL_TIM_GET_COUNTER(&htim3) + err / 2 >= open_loop_period_us) {
-            // __HAL_TIM_SET_COUNTER(htim, open_loop_period_us - 1);
               timer_set_counter(&htim3, open_loop_period_us-1);
           } else {
-            // __HAL_TIM_SET_COUNTER(htim, elapsed_cnt + err / 2);
               timer_set_counter(&htim3, err/2);
           }
           break;
@@ -558,13 +545,9 @@ void motor_control_task(void *argument) {
           err = open_loop_period_us / 2;
           open_loop_period_us += err / 20;
           timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
-          // __HAL_TIM_SET_AUTORELOAD(htim, open_loop_period_us);
-        // set_commutation_period_us_63(open_loop_period_us);
           if (__HAL_TIM_GET_COUNTER(&htim3) + err / 2 >= open_loop_period_us) {
-            // __HAL_TIM_SET_COUNTER(htim, open_loop_period_us - 1);
               timer_set_counter(&htim3, open_loop_period_us-1);
           } else {
-            // __HAL_TIM_SET_COUNTER(htim, elapsed_cnt + err / 2);
               timer_set_counter(&htim3, err/2);
           }
           break;
@@ -573,13 +556,9 @@ void motor_control_task(void *argument) {
           err = open_loop_period_us / 2;
           open_loop_period_us -= err / 20;
           timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
-          // __HAL_TIM_SET_AUTORELOAD(htim, open_loop_period_us);
-        // set_commutation_period_us_63(open_loop_period_us);
           if (__HAL_TIM_GET_COUNTER(&htim3) + err / 2 >= open_loop_period_us) {
-            // __HAL_TIM_SET_COUNTER(htim, open_loop_period_us - 1);
               timer_set_counter(&htim3, open_loop_period_us-1);
           } else {
-            // __HAL_TIM_SET_COUNTER(htim, elapsed_cnt + err / 2);
               timer_set_counter(&htim3, err/2);
           }
           break;
@@ -588,13 +567,9 @@ void motor_control_task(void *argument) {
           err = open_loop_period_us / 2;
           open_loop_period_us += err / 20;
           timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
-          // __HAL_TIM_SET_AUTORELOAD(htim, open_loop_period_us);
-        // set_commutation_period_us_63(open_loop_period_us);
           if (__HAL_TIM_GET_COUNTER(&htim3) + err / 2 >= open_loop_period_us) {
-            // __HAL_TIM_SET_COUNTER(htim, open_loop_period_us - 1);
               timer_set_counter(&htim3, open_loop_period_us-1);
           } else {
-            // __HAL_TIM_SET_COUNTER(htim, elapsed_cnt + err / 2);
               timer_set_counter(&htim3, err/2);
           }
           break;
@@ -603,13 +578,9 @@ void motor_control_task(void *argument) {
           err = open_loop_period_us / 2;
           open_loop_period_us -= err / 20;
           timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
-          // __HAL_TIM_SET_AUTORELOAD(htim, open_loop_period_us);
-        // set_commutation_period_us_63(open_loop_period_us);
           if (__HAL_TIM_GET_COUNTER(&htim3) + err / 2 >= open_loop_period_us) {
-            // __HAL_TIM_SET_COUNTER(htim, open_loop_period_us - 1);
               timer_set_counter(&htim3, open_loop_period_us-1);
           } else {
-            // __HAL_TIM_SET_COUNTER(htim, elapsed_cnt + err / 2);
               timer_set_counter(&htim3, err/2);
           }
           break;
@@ -622,120 +593,25 @@ void motor_control_task(void *argument) {
       safeguard = 0;
       motor_step(current_motor_step, duty_cycle);
       step_counter++;
-      // Increment step for the next cycle, wrapping around at the end
       current_motor_step =
           (motor_step_t)((current_motor_step + 1) % MOTOR_STEP_COUNT);
 
-      // Here you can add logic to ramp up the speed (decrease the period)
-      // or switch to closed-loop control.
-      // For example, to ramp speed:
       if (step_counter < 2)
         continue;
       if (step_counter == 2) {
-        // __HAL_TIM_SET_PRESCALER(&htim3, 63);
         timer_update_prescaler(&htim3, 63, TIMER_UPDATE_SAFE);
         open_loop_period_us = step_times_us[step_counter - 2];
         set_commutation_period_us_63(open_loop_period_us);
-        // duty_cycle = 4;
         continue;
       }
-      // if (step_counter == 3) {
-      //   open_loop_period_us = 5010;
-      // }
 
-      // if (open_loop_period_us > 1875 && (step_counter > 3 && step_counter <
-      // 9)) { // Ramp until we reach 1ms period
-      //   open_loop_period_us *= 0.5;      // Decrease period by 10us each step
-      //   set_commutation_period_us(open_loop_period_us);
-      //   // phase_jump_step = step_counter;
-      // }
-      // if (open_loop_period_us > 1850) { // Ramp until we reach 1ms period
-      //   if (duty_cycle < 12 && (step_counter > 5 && step_counter < 10)) { //
-      //   Ramp until we reach 1ms period
-      //     // duty_cycle += (80 - step_counter) * 0.01;
-      //     // duty_cycle = 6;
-      //     duty_cycle += 1;
-      //   }
-      //   if (duty_cycle < 12 && (step_counter > 50 && step_counter < 60)) { //
-      //   Ramp until we reach 1ms period
-      //     // duty_cycle += (80 - step_counter) * 0.01;
-      //     // duty_cycle = 6;
-      //     duty_cycle += 1;
-      //   }
-      //   open_loop_period_us = step_times_us[step_counter - 3];
-      //   set_commutation_period_us_63(open_loop_period_us);
-      //   phase_jump_step = step_counter;
-      // }
-      // if (open_loop_period_us > 1850) { // Ramp until we reach 1ms period
-      // if (open_loop_period_us > 1101 && go == 0) { // Ramp until we reach 1ms
-      // period if (duty_cycle < 14 &&
-      //     (step_counter > 5 &&
-      //      step_counter < 10)) { // Ramp until we reach 1ms period
-      //   // duty_cycle += (80 - step_counter) * 0.01;
-      //   // duty_cycle = 6;
-      //   duty_cycle += 1;
-      // }
-      // if (duty_cycle < 14 &&
-      //     (step_counter > 50 &&
-      //      step_counter < 60)) { // Ramp until we reach 1ms period
-      //   // duty_cycle += (80 - step_counter) * 0.01;
-      //   // duty_cycle = 6;
-      //   duty_cycle += 0.75;
-      // }
-      // if (duty_cycle < 15 &&
-      //     (step_counter > 120 &&
-      //      step_counter < 140)) { // Ramp until we reach 1ms period
-      //   // duty_cycle += (80 - step_counter) * 0.01;
-      //   // duty_cycle = 6;
-      //   duty_cycle += 1;
-      // }
-      // if (duty_cycle < 17 &&
-      //     (step_counter > 160 &&
-      //      step_counter < 180)) { // Ramp until we reach 1ms period
-      //   // duty_cycle += (80 - step_counter) * 0.01;
-      //   // duty_cycle = 6;
-      //   duty_cycle += 1;
-      // }
       if (open_loop_period_us > 4400) {
 
         open_loop_period_us = step_times_us[step_counter - 2];
         set_commutation_period_us_63(open_loop_period_us);
-        // __HAL_TIM_SET_COUNTER(&htim3, 500);
       } else {
         go = 1;
       }
-      // if (open_loop_period_us <= 1101)
-      // go = 1;
-      // continue;
-      // }
-
-      /*---------------------- bemf detection speed acquired
-       * -------------------------- */
-      // ZLATO
-      // if (step_counter % 12 == 0 && cnt < 30) {
-      // duty_cycle -= 0.05;
-      // set_commutation_period_us_63(open_loop_period_us/2);
-      // cnt++;
-      // }
-      // else {
-      // set_commutation_period_us_63(open_loop_period_us);
-      // }
-      // if (step_counter % 12 == 0 && cnt < 1) {
-      // if (cnt < 1) {
-      //   // duty_cycle -= 0.01;
-      //   set_commutation_period_us_63(open_loop_period_us / 2);
-      //   cnt++;
-      //   // go = 1;
-      // // } else {
-      // //   set_commutation_period_us_63(open_loop_period_us);
-      // }
-      // else if (cnt >= 1 && cnt < 1000) {
-      //   duty_cycle += 0.0035;
-      //   set_commutation_period_us_63(open_loop_period_us);
-      //   cnt++;
-      // } else {
-      //   go = 1;
-      // }
 
       // if (step_counter == 2000) duty_cycle += 2;
       // if (step_counter == 3000) duty_cycle += 5;

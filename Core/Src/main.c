@@ -182,17 +182,11 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 void handle_zero_crossing(TIM_HandleTypeDef *htim) {
-  // Get the timer's current count and period
   int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(htim);
   int32_t current_period = __HAL_TIM_GET_AUTORELOAD(htim);
 
-  // Calculate the timing error. The ideal zero-crossing happens at the
-  // midpoint of the commutation step. This 'err' is the difference
-  // between the ideal midpoint and the actual measured time.
   int32_t err = current_period / 2 - elapsed_cnt;
 
-  // Adjust the period for the next step to correct the timing,
-  // synchronizing the timer with the motor's actual speed.
   open_loop_period_us = current_period - err/20;
   __HAL_TIM_SET_AUTORELOAD(htim, open_loop_period_us);
   if (elapsed_cnt + err/2 >= open_loop_period_us) {
@@ -200,9 +194,6 @@ void handle_zero_crossing(TIM_HandleTypeDef *htim) {
   } else {
   __HAL_TIM_SET_COUNTER(htim, elapsed_cnt + err/2);
   }
-  // Set the timer's new period
-
-  // Set a flag to prevent this logic from executing more than once per step
   safeguard = 1;
 }
 
@@ -220,55 +211,24 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
   if (htim->Instance == TIM1) {
-    // __HAL_TIM_SET_COUNTER(&htim17, 0);
-    //
-    // HAL_TIM_OnePulse_Start_IT(&htim17, TIM_CHANNEL_1);
     HAL_TIM_Base_Stop_IT(&htim15);
 
-    // Reset the counter
     __HAL_TIM_SET_COUNTER(&htim15, 0);
 
-    // Configure for one-shot mode
     htim15.Instance->CR1 |= TIM_CR1_OPM; // One Pulse Mode
 
-    // Start timer with interrupt
     HAL_TIM_Base_Start_IT(&htim15);
-    // case TIM_CHANNEL_1:
-    //   g_one_shot_source = SOURCE_MOTOR_PHASE_A;
-    //   break;
-    // case TIM_CHANNEL_2:
-    //   g_one_shot_source = SOURCE_MOTOR_PHASE_B;
-    //   HAL_TIM_OnePulse_Start_IT(&htim17, TIM_CHANNEL_1);
-    //   break;
-    // case TIM_CHANNEL_3:
-    //   g_one_shot_source = SOURCE_MOTOR_PHASE_C;
-    //   HAL_TIM_OnePulse_Start_IT(&htim17, TIM_CHANNEL_1);
-    //   break;
-    // default:
-    //   break;
-    // }
   }
   if (htim->Instance == TIM15 && go) {
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
     switch (current_motor_step) {
     case MOTOR_STEP_1: // A->B, C is floating ---> down
       cmp3 = -1;
       old_cmp1 = cmp1;
       cmp1 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
-      // cmp1 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
       if (cmp1 == GPIO_PIN_RESET && old_cmp1 == GPIO_PIN_SET &&
           safeguard == 0) {
-        //     int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
-        //     int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
-        //     open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
-        // // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        //
-        //     __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
-        //     safeguard = 1;
-        // is_zero_crossing_detected = 1;
         handle_zero_crossing(&htim3);
       }
-      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
       break;
 
     case MOTOR_STEP_2: // A->C, B is floating ----> up
@@ -277,16 +237,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       cmp2 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
       if (cmp2 == GPIO_PIN_SET && old_cmp2 == GPIO_PIN_RESET &&
           safeguard == 0) {
-        // int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
-        // int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
-        // open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
-        // // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        //
-        // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
-        // safeguard = 1;
         handle_zero_crossing(&htim3);
       }
-      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp2);
       break;
 
     case MOTOR_STEP_3: // B->C, A is floating -----> down
@@ -295,14 +247,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       cmp3 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
       if (cmp3 == GPIO_PIN_RESET && old_cmp3 == GPIO_PIN_SET &&
           safeguard == 0) {
-        // int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
-        // int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
-        // open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
-        // // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        // // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        //
-        // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
-        // safeguard = 1;
         handle_zero_crossing(&htim3);
       }
       break;
@@ -313,17 +257,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       cmp1 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
       if (cmp1 == GPIO_PIN_SET && old_cmp1 == GPIO_PIN_RESET &&
           safeguard == 0) {
-        // int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
-        // int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
-        // open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
-        // // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        // // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        //
-        // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
-        // safeguard = 1;
         handle_zero_crossing(&htim3);
       }
-      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
       break;
 
     case MOTOR_STEP_5: // C->A, B is floating -----> down
@@ -332,15 +267,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       cmp2 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
       if (cmp2 == GPIO_PIN_RESET && old_cmp2 == GPIO_PIN_SET &&
           safeguard == 0) {
-        // int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
-        // int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
-        // open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
-        //
-        // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
-        // safeguard = 1;
         handle_zero_crossing(&htim3);
       }
-      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp2);
       break;
 
     case MOTOR_STEP_6: // C->B, A is floating ----> up
@@ -349,14 +277,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       cmp3 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
       if (cmp3 == GPIO_PIN_SET && old_cmp3 == GPIO_PIN_RESET &&
           safeguard == 0) {
-        // int32_t elapsed_cnt = __HAL_TIM_GET_COUNTER(&htim3);
-        // int32_t err = __HAL_TIM_GET_AUTORELOAD(&htim3) / 2 - elapsed_cnt;
-        // // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        // open_loop_period_us = __HAL_TIM_GET_AUTORELOAD(&htim3) - err;
-        // // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        //
-        // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
-        // safeguard = 1;
         handle_zero_crossing(&htim3);
       }
       break;
