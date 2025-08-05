@@ -527,6 +527,7 @@ void motor_control_task(void *argument) {
           } else {
               timer_set_counter(&htim3, err/2);
           }
+        // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
 
           break;
 
@@ -561,6 +562,7 @@ void motor_control_task(void *argument) {
           } else {
               timer_set_counter(&htim3, err/2);
           }
+        // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
           break;
 
         case MOTOR_STEP_5: // C->A, B is floating -----> down
@@ -592,9 +594,11 @@ void motor_control_task(void *argument) {
       }
       safeguard = 0;
       motor_step(current_motor_step, duty_cycle);
+      // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       step_counter++;
       current_motor_step =
           (motor_step_t)((current_motor_step + 1) % MOTOR_STEP_COUNT);
+
 
       if (step_counter < 2)
         continue;

@@ -20,6 +20,7 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "comp.h"
+#include "stm32g0xx_hal_gpio.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -228,6 +229,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       if (cmp1 == GPIO_PIN_RESET && old_cmp1 == GPIO_PIN_SET &&
           safeguard == 0) {
         handle_zero_crossing(&htim3);
+        // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       }
       break;
 
@@ -258,6 +260,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       if (cmp1 == GPIO_PIN_SET && old_cmp1 == GPIO_PIN_RESET &&
           safeguard == 0) {
         handle_zero_crossing(&htim3);
+        // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       }
       break;
 
