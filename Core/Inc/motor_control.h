@@ -21,6 +21,19 @@ typedef enum {
   SOURCE_MOTOR_PHASE_C,
 } OneShotSource_t;
 
+typedef enum {
+  BEMF_ERROR = -1,
+  BEMF_UNDERSHOOT = 0,
+  BEMF_VALID = 1,
+  BEMF_OVERSHOOT = 2
+} bemf_case_t;
+
+typedef struct {
+  uint32_t elapsed_cnt_at_bemf;
+  uint32_t current_period;
+} ctx_t;
+
+
 void motor_init(void);
 void motor_align(void);
 void motor_step(motor_step_t step, float duty_cycle);
