@@ -45,7 +45,7 @@
 #define DUTY_CYCLE 11.0f
 #define KI 20
 #define KP 2
-#define ZC_CNT_MIN 5
+#define ZC_CNT_MIN 3
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -93,7 +93,8 @@ volatile bemf_case_t prev_state = BEMF_ERROR;
 volatile ctx_t context = {.elapsed_cnt_at_bemf = 0,
                           .last_elapsed_cnt_at_bemf = 0,
                           .current_period = 0,
-                          .back_to_back = 0,
+                          .step_periods = {0},
+                          .last_steps = {.queue = {0}},
                           .last_period = 0};
 uint32_t zc_times[200] = {0};
 extern volatile uint8_t zc_flag;
@@ -102,7 +103,7 @@ volatile uint32_t zc_period = 0;
 volatile uint32_t zc_period_filt = 0;
 volatile uint32_t zc_period_prev = 0;
 volatile uint32_t half = 0;
-volatile float coef_half = 0.375f;
+float coef_half = 0.375f;
 // volatile float coef_half = 0.35f;
 volatile uint8_t enable_bemf = 0;
 /* USER CODE END PM */
@@ -196,12 +197,17 @@ void motor_handle_bemf() {
 
   if (state == BEMF_UNDERSHOOT) {
     /* DECREASE PERIOD */
-    context.elapsed_cnt_at_bemf = (context.current_period>>3);
+    context.elapsed_cnt_at_bemf = (context.current_period >> 4);
     zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
                 context.elapsed_cnt_at_bemf;
+    queue_put(&context.last_steps, zc_period);
     // zc_period_filt = zc_period / 2 + zc_period_prev / 2;
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
-    zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
+    // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
+    zc_period_filt = (context.last_steps.queue[0] >> 2) +
+                     (context.last_steps.queue[1] >> 2) +
+                     (context.last_steps.queue[2] >> 2) +
+                     (context.last_steps.queue[3] >> 2);
     half = (uint32_t)(coef_half * (float)zc_period_filt);
     zc_period_prev = zc_period;
     context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
@@ -244,10 +250,16 @@ void motor_handle_bemf() {
   } else if (state == BEMF_OVERSHOOT) {
     /* INCREASE PERIOD */
 
-    context.elapsed_cnt_at_bemf = context.current_period - (context.current_period>>3);
+    context.elapsed_cnt_at_bemf =
+        context.current_period - (context.current_period >> 4);
     zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
                 context.elapsed_cnt_at_bemf;
-    zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
+    queue_put(&context.last_steps, zc_period);
+    // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
+    zc_period_filt = (context.last_steps.queue[0] >> 2) +
+                     (context.last_steps.queue[1] >> 2) +
+                     (context.last_steps.queue[2] >> 2) +
+                     (context.last_steps.queue[3] >> 2);
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
     // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
     // half = coef_half * zc_period_filt;
@@ -284,15 +296,22 @@ void motor_control_task(void *argument) {
       zc_flag = 0;
       zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
                   context.elapsed_cnt_at_bemf;
+      queue_put(&context.last_steps, zc_period);
 
       // zc_period_filt = zc_period/2 + zc_period_prev/2;
-      zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-    // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
+      // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
+      zc_period_filt = (context.last_steps.queue[0] >> 2) +
+                       (context.last_steps.queue[1] >> 2) +
+                       (context.last_steps.queue[2] >> 2) +
+                       (context.last_steps.queue[3] >> 2);
+      // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
 
       half = (uint32_t)(coef_half * (float)zc_period_filt);
 
-      if (zc_cnt > ZC_CNT_MIN)
-      __HAL_TIM_SET_AUTORELOAD(&htim3, context.elapsed_cnt_at_bemf + half);
+      if (zc_cnt >= ZC_CNT_MIN) {
+        context.current_period = context.elapsed_cnt_at_bemf + half;
+        __HAL_TIM_SET_AUTORELOAD(&htim3, context.current_period);
+      }
       // printf("per: %ld prev: %ld filt: %ld \r\n", (long)zc_period,
       // (long)zc_period_prev, (long)zc_period_filt);
       zc_period_prev = zc_period;
@@ -430,30 +449,46 @@ void motor_control_task(void *argument) {
       if (step_counter < 3)
         continue;
       if (step_counter == 3) {
-        timer_update_prescaler(&htim3, 63, TIMER_UPDATE_IMMEDIATE);
-        open_loop_period_us = step_times_us[step_counter - 3];
+        timer_update_prescaler(&htim3, 31, TIMER_UPDATE_IMMEDIATE);
+        open_loop_period_us = 2 * step_times_us[step_counter - 3];
         set_commutation_period_us_63(open_loop_period_us);
+        // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
         continue;
       }
-      if (step_counter == 5) enable_bemf = 1;
+      if (step_counter == 4) {
+        timer_update_prescaler(&htim3, 15, TIMER_UPDATE_IMMEDIATE);
+        open_loop_period_us = 4 * step_times_us[step_counter - 3];
+        set_commutation_period_us_63(open_loop_period_us);
+        // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        continue;
+      }
+      // if (step_counter == 8) {
+      //   open_loop_period_us = 8 * step_times_us[step_counter - 3];
+      //   set_commutation_period_us_63(open_loop_period_us);
+      //   timer_update_prescaler(&htim3, 7, TIMER_UPDATE_IMMEDIATE);
+      //   continue;
+      // }
+      if (step_counter == 13)
+        enable_bemf = 1;
 
       // if (open_loop_period_us > 3300 && go == 0) {
       if (zc_cnt < ZC_CNT_MIN && go == 0) {
 
-        open_loop_period_us = step_times_us[step_counter - 3];
+        open_loop_period_us = 4 * step_times_us[step_counter - 3];
         set_commutation_period_us_63(open_loop_period_us);
       } else {
         go = 1;
         open_loop_period_us =
-            (open_loop_period_us > 3000) ? 3000 : zc_period_filt;
+            (open_loop_period_us > 12000) ? 12000 : zc_period_filt;
         context.last_period = context.current_period;
         context.current_period = open_loop_period_us;
 
         __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
       }
 
-      if (step_counter > 2000 && step_counter < 2200 && step_counter % 2 == 0)
-        duty_cycle += 0.05;
+      // if (step_counter > 2000 && step_counter < 2200 && step_counter % 2 ==
+      // 0)
+      //   duty_cycle += 0.05;
       // if (step_counter == 3000) duty_cycle += 5;
     }
   }

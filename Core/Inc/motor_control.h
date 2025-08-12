@@ -2,6 +2,7 @@
 #define INC_MOTOR_CONTROL_H_
 
 #include "stdint.h"
+#include "utils.h"
 
 typedef enum {
   MOTOR_STEP_1, // A->B ----- C 
@@ -33,7 +34,9 @@ typedef struct {
   uint32_t last_elapsed_cnt_at_bemf;
   uint32_t current_period;
   uint32_t last_period;
-  uint8_t back_to_back;
+  uint32_t step_periods[6];
+  queue_t last_steps;
+
 } ctx_t;
 
 

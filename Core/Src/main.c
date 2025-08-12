@@ -31,6 +31,7 @@
 #include "timer_utils.h"
 #include <stdint.h>
 #include <stdio.h>
+#include "utils.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -436,14 +437,15 @@ void SystemClock_Config(void) {
 /* USER CODE BEGIN 4 */
 void handle_zero_crossing(TIM_HandleTypeDef *htim) {
 
-  context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
+
+  context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf - 100;
   context.last_period = context.current_period;
   context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim);
   context.current_period = __HAL_TIM_GET_AUTORELOAD(htim);
 
-  if ((context.elapsed_cnt_at_bemf > (context.current_period >> 3)) &&
+  if ((context.elapsed_cnt_at_bemf > (context.current_period >> 4)) &&
       (context.elapsed_cnt_at_bemf <
-       (context.current_period - (context.current_period >> 3)))) {
+       (context.current_period - (context.current_period >> 4)))) {
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
     safeguard = 1;
     state = BEMF_VALID;
