@@ -21,6 +21,7 @@
 #include "FreeRTOS.h"
 #include "cmsis_os.h"
 #include "main.h"
+#include "stm32g0xx_hal_tim.h"
 #include "task.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -42,7 +43,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PERIOD 200
-#define DUTY_CYCLE 11.0f
+#define DUTY_CYCLE 12.0f
 #define KI 20
 #define KP 2
 #define ZC_CNT_MIN 3
@@ -104,6 +105,7 @@ volatile uint32_t zc_period_filt = 0;
 volatile uint32_t zc_period_prev = 0;
 volatile uint32_t half = 0;
 float coef_half = 0.375f;
+float duty_cycle = DUTY_CYCLE;
 // volatile float coef_half = 0.35f;
 volatile uint8_t enable_bemf = 0;
 /* USER CODE END PM */
@@ -286,7 +288,6 @@ void motor_control_task(void *argument) {
   set_commutation_period_us_255(open_loop_period_us);
   HAL_TIM_Base_Start_IT(&htim3);
   // HAL_COMP_Start(&hcomp1);
-  float duty_cycle = DUTY_CYCLE;
   int cnt = 0;
   uint32_t err;
 
@@ -446,19 +447,26 @@ void motor_control_task(void *argument) {
       motor_step(current_motor_step, duty_cycle);
       step_counter++;
 
-      if (step_counter < 3)
+      if (step_counter < 2)
         continue;
+      if (step_counter == 2) {
+        // timer_update_prescaler(&htim3, 31, TIMER_UPDATE_IMMEDIATE);
+    
+        __HAL_TIM_SET_PRESCALER(&htim3, 31);
+        continue;
+      }
+
       if (step_counter == 3) {
-        timer_update_prescaler(&htim3, 31, TIMER_UPDATE_IMMEDIATE);
         open_loop_period_us = 2 * step_times_us[step_counter - 3];
         set_commutation_period_us_63(open_loop_period_us);
         // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        __HAL_TIM_SET_PRESCALER(&htim3, 15);
         continue;
       }
       if (step_counter == 4) {
-        timer_update_prescaler(&htim3, 15, TIMER_UPDATE_IMMEDIATE);
         open_loop_period_us = 4 * step_times_us[step_counter - 3];
         set_commutation_period_us_63(open_loop_period_us);
+        // timer_update_prescaler(&htim3, 15, TIMER_UPDATE_IMMEDIATE);
         // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
         continue;
       }
@@ -486,10 +494,12 @@ void motor_control_task(void *argument) {
         __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
       }
 
-      // if (step_counter > 2000 && step_counter < 2200 && step_counter % 2 ==
+      // if (step_counter > 2000 && step_counter < 3000 && step_counter % 2 ==
       // 0)
-      //   duty_cycle += 0.05;
-      // if (step_counter == 3000) duty_cycle += 5;
+      // if (step_counter > 2000 && step_counter < 3000)
+      //   duty_cycle += 0.005;
+      // if (step_counter == 3000) duty_cycle += 1;
+      // if (step_counter == 4000) duty_cycle += 1;
     }
   }
 }
