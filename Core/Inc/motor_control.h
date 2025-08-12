@@ -30,7 +30,10 @@ typedef enum {
 
 typedef struct {
   uint32_t elapsed_cnt_at_bemf;
+  uint32_t last_elapsed_cnt_at_bemf;
   uint32_t current_period;
+  uint32_t last_period;
+  uint8_t back_to_back;
 } ctx_t;
 
 
