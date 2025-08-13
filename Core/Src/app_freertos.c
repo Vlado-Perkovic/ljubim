@@ -21,6 +21,7 @@
 #include "FreeRTOS.h"
 #include "cmsis_os.h"
 #include "main.h"
+#include "stm32g0xx_hal_gpio.h"
 #include "stm32g0xx_hal_tim.h"
 #include "task.h"
 
@@ -43,7 +44,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PERIOD 200
-#define DUTY_CYCLE 12.0f
+#define DUTY_CYCLE 10.5f
 #define KI 20
 #define KP 2
 #define ZC_CNT_MIN 3
@@ -207,10 +208,13 @@ void motor_handle_bemf() {
     // zc_period_filt = zc_period / 2 + zc_period_prev / 2;
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
     // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-    zc_period_filt = (context.last_steps.queue[0] >> 2) +
-                     (context.last_steps.queue[1] >> 2) +
-                     (context.last_steps.queue[2] >> 2) +
-                     (context.last_steps.queue[3] >> 2);
+    zc_period_filt = 3*(context.last_steps.queue[0] >> 2) +
+                     (context.last_steps.queue[1] >> 2);
+    // zc_period_filt = (context.last_steps.queue[0] >> 2) +
+    //                  (context.last_steps.queue[1] >> 2) +
+    //                  (context.last_steps.queue[2] >> 2) +
+    //                  (context.last_steps.queue[3] >> 2);
+    // zc_period_filt *= 0.8;
     half = (uint32_t)(coef_half * (float)zc_period_filt);
     zc_period_prev = zc_period;
     context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
@@ -259,10 +263,12 @@ void motor_handle_bemf() {
                 context.elapsed_cnt_at_bemf;
     queue_put(&context.last_steps, zc_period);
     // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-    zc_period_filt = (context.last_steps.queue[0] >> 2) +
-                     (context.last_steps.queue[1] >> 2) +
-                     (context.last_steps.queue[2] >> 2) +
-                     (context.last_steps.queue[3] >> 2);
+    // zc_period_filt = (context.last_steps.queue[0] >> 2) +
+    //                  (context.last_steps.queue[1] >> 2) +
+    //                  (context.last_steps.queue[2] >> 2) +
+    //                  (context.last_steps.queue[3] >> 2);
+    zc_period_filt = 3*(context.last_steps.queue[0] >> 2) +
+                     (context.last_steps.queue[1] >> 2);
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
     // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
     // half = coef_half * zc_period_filt;
@@ -306,6 +312,8 @@ void motor_control_task(void *argument) {
                        (context.last_steps.queue[1] >> 2) +
                        (context.last_steps.queue[2] >> 2) +
                        (context.last_steps.queue[3] >> 2);
+    // zc_period_filt = (context.last_steps.queue[0] >> 1) +
+    //                  (context.last_steps.queue[1] >> 1);
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
 
       half = (uint32_t)(coef_half * (float)zc_period_filt);
@@ -452,7 +460,7 @@ void motor_control_task(void *argument) {
         continue;
       if (step_counter == 2) {
         // timer_update_prescaler(&htim3, 31, TIMER_UPDATE_IMMEDIATE);
-    
+
         __HAL_TIM_SET_PRESCALER(&htim3, 31);
         continue;
       }
@@ -499,7 +507,21 @@ void motor_control_task(void *argument) {
       // 0)
       // if (step_counter > 2000 && step_counter < 3000)
       //   duty_cycle += 0.005;
-      // if (step_counter == 3000) duty_cycle += 1;
+      if (step_counter == 2000) {
+        duty_cycle += 2;
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      }
+      if (step_counter == 3000) {
+        duty_cycle += 1;
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      }
+      if (step_counter == 4000) {
+        duty_cycle += 1;
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      }
       // if (step_counter == 4000) duty_cycle += 1;
     }
   }
