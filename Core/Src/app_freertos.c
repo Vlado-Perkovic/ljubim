@@ -106,9 +106,10 @@ volatile uint32_t zc_period_filt = 0;
 volatile uint32_t zc_period_prev = 0;
 volatile uint32_t half = 0;
 // float coef_half = 0.375f; // 7.5deg advance
-float coef_half = 0.3f; // 12deg advance
+float coef_half = 0.275f; // 12deg advance
 float duty_cycle = DUTY_CYCLE;
 // volatile float coef_half = 0.35f;
+uint8_t accel = 0;
 volatile uint8_t enable_bemf = 0;
 /* USER CODE END PM */
 
@@ -208,7 +209,7 @@ void motor_handle_bemf() {
     // zc_period_filt = zc_period / 2 + zc_period_prev / 2;
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
     // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-    zc_period_filt = 3*(context.last_steps.queue[0] >> 2) +
+    zc_period_filt = 3 * (context.last_steps.queue[0] >> 2) +
                      (context.last_steps.queue[1] >> 2);
     // zc_period_filt = (context.last_steps.queue[0] >> 2) +
     //                  (context.last_steps.queue[1] >> 2) +
@@ -257,6 +258,7 @@ void motor_handle_bemf() {
   } else if (state == BEMF_OVERSHOOT) {
     /* INCREASE PERIOD */
 
+    accel = 0;
     context.elapsed_cnt_at_bemf =
         context.current_period - (context.current_period >> 4);
     zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
@@ -267,7 +269,7 @@ void motor_handle_bemf() {
     //                  (context.last_steps.queue[1] >> 2) +
     //                  (context.last_steps.queue[2] >> 2) +
     //                  (context.last_steps.queue[3] >> 2);
-    zc_period_filt = 3*(context.last_steps.queue[0] >> 2) +
+    zc_period_filt = 3 * (context.last_steps.queue[0] >> 2) +
                      (context.last_steps.queue[1] >> 2);
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
     // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
@@ -308,12 +310,18 @@ void motor_control_task(void *argument) {
 
       // zc_period_filt = zc_period/2 + zc_period_prev/2;
       // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-      zc_period_filt = (context.last_steps.queue[0] >> 2) +
-                       (context.last_steps.queue[1] >> 2) +
-                       (context.last_steps.queue[2] >> 2) +
-                       (context.last_steps.queue[3] >> 2);
-    // zc_period_filt = (context.last_steps.queue[0] >> 1) +
-    //                  (context.last_steps.queue[1] >> 1);
+      // zc_period_filt = 3*(context.last_steps.queue[0] >> 3) +
+      //                  (context.last_steps.queue[1] >> 3) +
+      //                  (context.last_steps.queue[2] >> 3) +
+      //                  (context.last_steps.queue[3] >> 3) +
+      //                  (context.last_steps.queue[4] >> 3) +
+      //                  (context.last_steps.queue[5] >> 3);
+      // zc_period_filt = (context.last_steps.queue[0] >> 2) +
+      //                  (context.last_steps.queue[1] >> 2) +
+      //                  (context.last_steps.queue[2] >> 2) +
+      //                  (context.last_steps.queue[3] >> 2);
+      zc_period_filt = (context.last_steps.queue[0] >> 1) +
+                       (context.last_steps.queue[1] >> 1);
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
 
       half = (uint32_t)(coef_half * (float)zc_period_filt);
@@ -477,26 +485,27 @@ void motor_control_task(void *argument) {
         set_commutation_period_us_63(open_loop_period_us);
         // timer_update_prescaler(&htim3, 15, TIMER_UPDATE_IMMEDIATE);
         // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        __HAL_TIM_SET_PRESCALER(&htim3, 7);
         continue;
       }
-      // if (step_counter == 8) {
-      //   open_loop_period_us = 8 * step_times_us[step_counter - 3];
-      //   set_commutation_period_us_63(open_loop_period_us);
-      //   timer_update_prescaler(&htim3, 7, TIMER_UPDATE_IMMEDIATE);
-      //   continue;
-      // }
+      if (step_counter == 8) {
+        open_loop_period_us = 8 * step_times_us[step_counter - 3];
+        set_commutation_period_us_63(open_loop_period_us);
+        // timer_update_prescaler(&htim3, 7, TIMER_UPDATE_IMMEDIATE);
+        continue;
+      }
       if (step_counter == 13)
         enable_bemf = 1;
 
       // if (open_loop_period_us > 3300 && go == 0) {
       if (zc_cnt < ZC_CNT_MIN && go == 0) {
 
-        open_loop_period_us = 4 * step_times_us[step_counter - 3];
+        open_loop_period_us = 8 * step_times_us[step_counter - 3];
         set_commutation_period_us_63(open_loop_period_us);
       } else {
         go = 1;
         open_loop_period_us =
-            (open_loop_period_us > 12000) ? 12000 : zc_period_filt;
+            (open_loop_period_us > 30000) ? 30000 : zc_period_filt;
         context.last_period = context.current_period;
         context.current_period = open_loop_period_us;
 
@@ -507,21 +516,23 @@ void motor_control_task(void *argument) {
       // 0)
       // if (step_counter > 2000 && step_counter < 3000)
       //   duty_cycle += 0.005;
-      if (step_counter == 2000) {
-        duty_cycle += 2;
-        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-      }
-      if (step_counter == 3000) {
-        duty_cycle += 1;
-        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-      }
-      if (step_counter == 4000) {
-        duty_cycle += 1;
-        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-      }
+      // if (step_counter == 2000) {
+      //   duty_cycle += 2;
+      //   // accel = 1;
+      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      // }
+      // if (step_counter == 3000) {
+      //   duty_cycle += 2;
+      //   // accel = 1;
+      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      // }
+      // if (step_counter > 5000 && step_counter < 25000 &&
+      //     step_counter % 500 == 0) {
+      //   duty_cycle += 0.1;
+      //   __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us*0.8);
+      // }
       // if (step_counter == 4000) duty_cycle += 1;
     }
   }

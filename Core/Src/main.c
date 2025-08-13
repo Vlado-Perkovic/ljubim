@@ -438,7 +438,7 @@ void SystemClock_Config(void) {
 void handle_zero_crossing(TIM_HandleTypeDef *htim) {
 
 
-  context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf - 100;
+  context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf - 25*8;
   context.last_period = context.current_period;
   context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim);
   context.current_period = __HAL_TIM_GET_AUTORELOAD(htim);
