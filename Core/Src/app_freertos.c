@@ -84,6 +84,7 @@ const uint32_t step_times_us[] = {
 };
 extern volatile GPIO_PinState cmp1, cmp2, cmp3;
 extern volatile uint8_t safeguard;
+extern volatile uint8_t pwm_cnt;
 extern void handle_zero_crossing(TIM_HandleTypeDef *htim);
 extern volatile uint32_t zc_cnt;
 
@@ -100,13 +101,15 @@ volatile ctx_t context = {.elapsed_cnt_at_bemf = 0,
                           .last_period = 0};
 uint32_t zc_times[200] = {0};
 extern volatile uint8_t zc_flag;
+extern volatile uint8_t undershoot_flag;
 
 volatile uint32_t zc_period = 0;
 volatile uint32_t zc_period_filt = 0;
 volatile uint32_t zc_period_prev = 0;
 volatile uint32_t half = 0;
-// float coef_half = 0.375f; // 7.5deg advance
-float coef_half = 0.275f; // 12deg advance
+float coef_half = 0.375f; // 7.5deg advance
+// float coef_half = 0.275f; // 12deg advance
+// float coef_half = 0.5f; // 0deg advance
 float duty_cycle = DUTY_CYCLE;
 // volatile float coef_half = 0.35f;
 uint8_t accel = 0;
@@ -202,23 +205,23 @@ void motor_handle_bemf() {
 
   if (state == BEMF_UNDERSHOOT) {
     /* DECREASE PERIOD */
-    context.elapsed_cnt_at_bemf = (context.current_period >> 4);
-    zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
-                context.elapsed_cnt_at_bemf;
-    queue_put(&context.last_steps, zc_period);
-    // zc_period_filt = zc_period / 2 + zc_period_prev / 2;
-    // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
-    // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-    zc_period_filt = 3 * (context.last_steps.queue[0] >> 2) +
-                     (context.last_steps.queue[1] >> 2);
-    // zc_period_filt = (context.last_steps.queue[0] >> 2) +
-    //                  (context.last_steps.queue[1] >> 2) +
-    //                  (context.last_steps.queue[2] >> 2) +
-    //                  (context.last_steps.queue[3] >> 2);
-    // zc_period_filt *= 0.8;
-    half = (uint32_t)(coef_half * (float)zc_period_filt);
-    zc_period_prev = zc_period;
-    context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
+    // context.elapsed_cnt_at_bemf = (context.current_period >> 4);
+    // zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
+    //             context.elapsed_cnt_at_bemf;
+    // queue_put(&context.last_steps, zc_period);
+    // // zc_period_filt = zc_period / 2 + zc_period_prev / 2;
+    // // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
+    // // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
+    // zc_period_filt = 3 * (context.last_steps.queue[0] >> 2) +
+    //                  (context.last_steps.queue[1] >> 2);
+    // // zc_period_filt = (context.last_steps.queue[0] >> 2) +
+    // //                  (context.last_steps.queue[1] >> 2) +
+    // //                  (context.last_steps.queue[2] >> 2) +
+    // //                  (context.last_steps.queue[3] >> 2);
+    // // zc_period_filt *= 0.8;
+    // half = (uint32_t)(coef_half * (float)zc_period_filt);
+    // zc_period_prev = zc_period;
+    // context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
 
     // context.back_to_back = 0;
     // err = open_loop_period_us / 2;
@@ -234,9 +237,11 @@ void motor_handle_bemf() {
     // if (zc_cnt < 2) return;
     if (zc_cnt < 200) {
 
-      zc_times[zc_cnt] = context.last_period -
-                         context.last_elapsed_cnt_at_bemf +
-                         context.elapsed_cnt_at_bemf;
+      // zc_times[zc_cnt] = zc_period_filt;
+      zc_times[zc_cnt] = context.current_period;
+      // zc_times[zc_cnt] = context.last_period -
+      //                    context.last_elapsed_cnt_at_bemf +
+      //                    context.elapsed_cnt_at_bemf;
       // printf("bemfper: %d lastper: %d currper: %d\r\n", zc_times[zc_cnt],
       // context.last_period, context.current_period);
     }
@@ -302,6 +307,42 @@ void motor_control_task(void *argument) {
 
   for (;;) {
     // Wait here indefinitely for a notification from the timer ISR
+    if (undershoot_flag == 1) {
+      undershoot_flag = 0;
+      zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
+                  context.elapsed_cnt_at_bemf;
+      queue_put(&context.last_steps, zc_period);
+
+      // zc_period_filt = zc_period/2 + zc_period_prev/2;
+      // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
+      // zc_period_filt = (context.last_steps.queue[0] >> 3) +
+      //                  (context.last_steps.queue[1] >> 3) +
+      //                  (context.last_steps.queue[2] >> 3) +
+      //                  (context.last_steps.queue[3] >> 3) +
+      //                  (context.last_steps.queue[4] >> 3) +
+      //                  (context.last_steps.queue[5] >> 3) +
+      //                  (context.last_steps.queue[6] >> 3) +
+      //                  (context.last_steps.queue[7] >> 3);
+      zc_period_filt = (context.last_steps.queue[0] >> 2) +
+                       (context.last_steps.queue[1] >> 2) +
+                       (context.last_steps.queue[2] >> 2) +
+                       (context.last_steps.queue[3] >> 2);
+      // zc_period_filt = (context.last_steps.queue[0] >> 1) +
+      //                  (context.last_steps.queue[1] >> 1);
+      // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
+
+      half = (uint32_t)(coef_half * (float)zc_period_filt);
+      // half = zc_period_filt >> 1;
+
+      // if (zc_cnt >= ZC_CNT_MIN) {
+        context.current_period = context.elapsed_cnt_at_bemf + half;
+        __HAL_TIM_SET_AUTORELOAD(&htim3, context.current_period);
+      // }
+      // printf("per: %ld prev: %ld filt: %ld \r\n", (long)zc_period,
+      // (long)zc_period_prev, (long)zc_period_filt);
+      zc_period_prev = zc_period;
+    }
+
     if (zc_flag == 1) {
       zc_flag = 0;
       zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
@@ -310,21 +351,24 @@ void motor_control_task(void *argument) {
 
       // zc_period_filt = zc_period/2 + zc_period_prev/2;
       // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-      // zc_period_filt = 3*(context.last_steps.queue[0] >> 3) +
+      // zc_period_filt = (context.last_steps.queue[0] >> 3) +
       //                  (context.last_steps.queue[1] >> 3) +
       //                  (context.last_steps.queue[2] >> 3) +
       //                  (context.last_steps.queue[3] >> 3) +
       //                  (context.last_steps.queue[4] >> 3) +
-      //                  (context.last_steps.queue[5] >> 3);
-      // zc_period_filt = (context.last_steps.queue[0] >> 2) +
-      //                  (context.last_steps.queue[1] >> 2) +
-      //                  (context.last_steps.queue[2] >> 2) +
-      //                  (context.last_steps.queue[3] >> 2);
-      zc_period_filt = (context.last_steps.queue[0] >> 1) +
-                       (context.last_steps.queue[1] >> 1);
+      //                  (context.last_steps.queue[5] >> 3) +
+      //                  (context.last_steps.queue[6] >> 3) +
+      //                  (context.last_steps.queue[7] >> 3);
+      zc_period_filt = (context.last_steps.queue[0] >> 2) +
+                       (context.last_steps.queue[1] >> 2) +
+                       (context.last_steps.queue[2] >> 2) +
+                       (context.last_steps.queue[3] >> 2);
+      // zc_period_filt = (context.last_steps.queue[0] >> 1) +
+      //                  (context.last_steps.queue[1] >> 1);
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
 
-      half = (uint32_t)(coef_half * (float)zc_period_filt);
+      // half = (uint32_t)(coef_half * (float)zc_period_filt);
+      half = zc_period_filt >> 1;
 
       if (zc_cnt >= ZC_CNT_MIN) {
         context.current_period = context.elapsed_cnt_at_bemf + half;
@@ -459,9 +503,13 @@ void motor_control_task(void *argument) {
       }
       state = BEMF_ERROR;
       safeguard = 0;
+      pwm_cnt = 0;
       current_motor_step =
           (motor_step_t)((current_motor_step + 1) % MOTOR_STEP_COUNT);
       motor_step(current_motor_step, duty_cycle);
+      state = BEMF_ERROR;
+      safeguard = 0;
+      pwm_cnt = 0;
       step_counter++;
 
       if (step_counter < 2)
@@ -517,10 +565,10 @@ void motor_control_task(void *argument) {
       // if (step_counter > 2000 && step_counter < 3000)
       //   duty_cycle += 0.005;
       // if (step_counter == 2000) {
-      //   duty_cycle += 2;
+      //   duty_cycle += 9;
       //   // accel = 1;
-      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      //   // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      //   // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
       // if (step_counter == 3000) {
       //   duty_cycle += 2;
@@ -528,11 +576,16 @@ void motor_control_task(void *argument) {
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
-      // if (step_counter > 5000 && step_counter < 25000 &&
-      //     step_counter % 500 == 0) {
-      //   duty_cycle += 0.1;
-      //   __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us*0.8);
+      // if (step_counter == 4000) {
+      //   duty_cycle += 2;
+      //   // accel = 1;
+      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
+      if (step_counter > 1500 && step_counter < 25000 &&
+          step_counter % 50 == 0) {
+        duty_cycle += 0.2;
+      }
       // if (step_counter == 4000) duty_cycle += 1;
     }
   }

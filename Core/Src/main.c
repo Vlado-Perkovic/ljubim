@@ -21,6 +21,7 @@
 #include "cmsis_os.h"
 #include "comp.h"
 #include "gpio.h"
+#include "stm32g0xx_hal_gpio.h"
 #include "tim.h"
 #include "usart.h"
 
@@ -29,9 +30,9 @@
 #include "motor_control.h"
 #include "tim.h"
 #include "timer_utils.h"
+#include "utils.h"
 #include <stdint.h>
 #include <stdio.h>
-#include "utils.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -123,6 +124,7 @@ void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 // void motor_handle_bemf();
 void handle_zero_crossing(TIM_HandleTypeDef *htim);
+void handle_undershoot(TIM_HandleTypeDef *htim);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -135,6 +137,8 @@ volatile GPIO_PinState old_cmp1, old_cmp2, old_cmp3;
 volatile uint8_t safeguard = 0;
 volatile uint32_t zc_cnt = 0;
 volatile uint8_t zc_flag = 0;
+volatile uint8_t undershoot_flag = 0;
+volatile uint8_t pwm_cnt = 0;
 // volatile uint8_t is_zero_crossing_detected = 0;
 
 int _write(int file, char *ptr, int len) {
@@ -437,16 +441,15 @@ void SystemClock_Config(void) {
 /* USER CODE BEGIN 4 */
 void handle_zero_crossing(TIM_HandleTypeDef *htim) {
 
-
-  context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf - 25*8;
+  context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
   context.last_period = context.current_period;
-  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim);
+  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim) - 133;
   context.current_period = __HAL_TIM_GET_AUTORELOAD(htim);
 
-  if ((context.elapsed_cnt_at_bemf > (context.current_period >> 4)) &&
+  if ((context.elapsed_cnt_at_bemf > (context.current_period >> 3)) &&
       (context.elapsed_cnt_at_bemf <
-       (context.current_period - (context.current_period >> 4)))) {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+       (context.current_period - (context.current_period >> 3)))) {
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
     safeguard = 1;
     state = BEMF_VALID;
     zc_flag = 1;
@@ -463,6 +466,20 @@ void handle_zero_crossing(TIM_HandleTypeDef *htim) {
   // __HAL_TIM_SET_COUNTER(htim, elapsed_cnt + err/2);
   // }
   // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+}
+void handle_undershoot(TIM_HandleTypeDef *htim) {
+
+  context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
+  context.last_period = context.current_period;
+  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_AUTORELOAD(htim) >> 3;
+  context.current_period = __HAL_TIM_GET_AUTORELOAD(htim);
+
+  // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+  safeguard = 1;
+  state = BEMF_UNDERSHOOT;
+  undershoot_flag = 1;
+  // if (zc_cnt < 10000)
+  //   zc_cnt++;
 }
 // void motor_handle_bemf() {
 //   int32_t err;
@@ -566,21 +583,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     HAL_TIM_Base_Start_IT(&htim15);
   }
   if (htim->Instance == TIM15 && enable_bemf) {
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
     switch (current_motor_step) {
     case MOTOR_STEP_1: // A->B, C is floating ---> down
-      // cmp3 = -1;
-      // old_cmp1 = cmp1;
-      // cmp1 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
-      //   // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
-      // if (cmp1 == GPIO_PIN_RESET && old_cmp1 == GPIO_PIN_SET &&
-      //     safeguard == 0) {
-      //   handle_zero_crossing(&htim3);
-      //   // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-      // }
+
       cmp3 = -1;
       old_cmp1 = cmp1;
       cmp1 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
       // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
+      /*UNDERSHOOT*/
+      if (pwm_cnt == 0) {
+        if (cmp1 == GPIO_PIN_SET && old_cmp1 == -1 && safeguard == 0) {
+          handle_undershoot(&htim3);
+        }
+        pwm_cnt = 1;
+      }
+
       if (cmp1 == GPIO_PIN_SET && old_cmp1 == GPIO_PIN_RESET &&
           safeguard == 0) {
         handle_zero_crossing(&htim3);
@@ -598,6 +616,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp1 = -1;
       old_cmp2 = cmp2;
       cmp2 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
+      if (pwm_cnt == 0) {
+        if (cmp2 == GPIO_PIN_RESET && old_cmp2 == -1 && safeguard == 0) {
+          handle_undershoot(&htim3);
+        }
+        pwm_cnt = 1;
+      }
       if (cmp2 == GPIO_PIN_RESET && old_cmp2 == GPIO_PIN_SET &&
           safeguard == 0) {
         handle_zero_crossing(&htim3);
@@ -615,6 +639,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp2 = -1;
       old_cmp3 = cmp3;
       cmp3 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
+      /*UNDERSHOOT*/
+      if (pwm_cnt == 0) {
+        if (cmp3 == GPIO_PIN_SET && old_cmp3 == -1 && safeguard == 0) {
+          handle_undershoot(&htim3);
+        }
+        pwm_cnt = 1;
+      }
       if (cmp3 == GPIO_PIN_SET && old_cmp3 == GPIO_PIN_RESET &&
           safeguard == 0) {
         handle_zero_crossing(&htim3);
@@ -633,6 +664,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp3 = -1;
       old_cmp1 = cmp1;
       cmp1 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
+      if (pwm_cnt == 0) {
+        if (cmp1 == GPIO_PIN_RESET && old_cmp1 == -1 && safeguard == 0) {
+          handle_undershoot(&htim3);
+        }
+        pwm_cnt = 1;
+      }
       if (cmp1 == GPIO_PIN_RESET && old_cmp1 == GPIO_PIN_SET &&
           safeguard == 0) {
         handle_zero_crossing(&htim3);
@@ -651,6 +688,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp1 = -1;
       old_cmp2 = cmp2;
       cmp2 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
+      /*UNDERSHOOT*/
+      if (pwm_cnt == 0) {
+        if (cmp2 == GPIO_PIN_SET && old_cmp2 == -1 && safeguard == 0) {
+          handle_undershoot(&htim3);
+        }
+        pwm_cnt = 1;
+      }
       if (cmp2 == GPIO_PIN_SET && old_cmp2 == GPIO_PIN_RESET &&
           safeguard == 0) {
         handle_zero_crossing(&htim3);
@@ -668,6 +712,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp2 = -1;
       old_cmp3 = cmp3;
       cmp3 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
+      /*UNDERSHOOT*/
+      if (pwm_cnt == 0) {
+        if (cmp3 == GPIO_PIN_RESET && old_cmp3 == -1 && safeguard == 0) {
+          handle_undershoot(&htim3);
+        }
+        pwm_cnt = 1;
+      }
       if (cmp3 == GPIO_PIN_RESET && old_cmp3 == GPIO_PIN_SET &&
           safeguard == 0) {
         handle_zero_crossing(&htim3);

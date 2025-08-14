@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define QUEUE_SIZE 6
+#define QUEUE_SIZE 8
 typedef struct {
   uint32_t queue[QUEUE_SIZE];
 
