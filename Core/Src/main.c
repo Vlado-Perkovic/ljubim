@@ -22,6 +22,7 @@
 #include "comp.h"
 #include "gpio.h"
 #include "stm32g0xx_hal_gpio.h"
+#include "stm32g0xx_hal_tim.h"
 #include "tim.h"
 #include "usart.h"
 
@@ -113,9 +114,11 @@
 extern uint32_t open_loop_period_us;
 extern volatile motor_step_t current_motor_step;
 extern volatile uint8_t go;
+extern volatile uint8_t running;
 extern volatile bemf_case_t state;
 extern volatile ctx_t context;
 extern volatile uint8_t enable_bemf;
+extern volatile uint8_t scan;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -351,7 +354,7 @@ int main(void) {
   //       continue;
   //     }
   //
-  //     if (open_loop_period_us > 3300 && go == 0) {
+  //     if (open_loop_period_us > 3300 && running == 0) {
   //
   //       open_loop_period_us = step_times_us[step_counter - 3];
   //       set_commutation_period_us_63(open_loop_period_us);
@@ -444,12 +447,13 @@ void handle_zero_crossing(TIM_HandleTypeDef *htim) {
   context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
   context.last_period = context.current_period;
   context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim) - 133;
+  // context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim);
   context.current_period = __HAL_TIM_GET_AUTORELOAD(htim);
 
-  if ((context.elapsed_cnt_at_bemf > (context.current_period >> 3)) &&
+  if ((context.elapsed_cnt_at_bemf > (context.current_period >> 4)) &&
       (context.elapsed_cnt_at_bemf <
-       (context.current_period - (context.current_period >> 3)))) {
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+       (context.current_period - (context.current_period >> 4)))) {
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
     safeguard = 1;
     state = BEMF_VALID;
     zc_flag = 1;
@@ -471,7 +475,7 @@ void handle_undershoot(TIM_HandleTypeDef *htim) {
 
   context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
   context.last_period = context.current_period;
-  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_AUTORELOAD(htim) >> 3;
+  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_AUTORELOAD(htim) >> 4;
   context.current_period = __HAL_TIM_GET_AUTORELOAD(htim);
 
   // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
@@ -583,7 +587,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     HAL_TIM_Base_Start_IT(&htim15);
   }
   if (htim->Instance == TIM15 && enable_bemf) {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+    // if (htim->Instance == TIM1 && enable_bemf) {
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
     switch (current_motor_step) {
     case MOTOR_STEP_1: // A->B, C is floating ---> down
 
@@ -592,8 +597,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp1 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
       // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
       /*UNDERSHOOT*/
-      if (pwm_cnt == 0) {
-        if (cmp1 == GPIO_PIN_SET && old_cmp1 == -1 && safeguard == 0) {
+      if (__HAL_TIM_GET_COUNTER(&htim3) >
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+          running && pwm_cnt == 0) {
+        if (cmp1 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
         }
         pwm_cnt = 1;
@@ -616,8 +623,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp1 = -1;
       old_cmp2 = cmp2;
       cmp2 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
-      if (pwm_cnt == 0) {
-        if (cmp2 == GPIO_PIN_RESET && old_cmp2 == -1 && safeguard == 0) {
+      if (__HAL_TIM_GET_COUNTER(&htim3) >
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+          running && pwm_cnt == 0) {
+        if (cmp2 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);
         }
         pwm_cnt = 1;
@@ -640,8 +649,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       old_cmp3 = cmp3;
       cmp3 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
       /*UNDERSHOOT*/
-      if (pwm_cnt == 0) {
-        if (cmp3 == GPIO_PIN_SET && old_cmp3 == -1 && safeguard == 0) {
+      if (__HAL_TIM_GET_COUNTER(&htim3) >
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+          running && pwm_cnt == 0) {
+        if (cmp3 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
         }
         pwm_cnt = 1;
@@ -664,8 +675,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp3 = -1;
       old_cmp1 = cmp1;
       cmp1 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
-      if (pwm_cnt == 0) {
-        if (cmp1 == GPIO_PIN_RESET && old_cmp1 == -1 && safeguard == 0) {
+      if (__HAL_TIM_GET_COUNTER(&htim3) >
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+          running && pwm_cnt == 0) {
+        if (cmp1 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);
         }
         pwm_cnt = 1;
@@ -689,8 +702,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       old_cmp2 = cmp2;
       cmp2 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
       /*UNDERSHOOT*/
-      if (pwm_cnt == 0) {
-        if (cmp2 == GPIO_PIN_SET && old_cmp2 == -1 && safeguard == 0) {
+      if (__HAL_TIM_GET_COUNTER(&htim3) >
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+          running && pwm_cnt == 0) {
+        if (cmp2 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
         }
         pwm_cnt = 1;
@@ -713,8 +728,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       old_cmp3 = cmp3;
       cmp3 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
       /*UNDERSHOOT*/
-      if (pwm_cnt == 0) {
-        if (cmp3 == GPIO_PIN_RESET && old_cmp3 == -1 && safeguard == 0) {
+      if (__HAL_TIM_GET_COUNTER(&htim3) >
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+          running && pwm_cnt == 0) {
+        if (cmp3 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);
         }
         pwm_cnt = 1;
@@ -729,6 +746,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     default:
       break;
     }
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
   }
 
   /* USER CODE END Callback 0 */
