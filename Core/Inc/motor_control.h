@@ -42,7 +42,7 @@ typedef struct {
 
 void motor_init(void);
 void motor_align(void);
-void motor_step(motor_step_t step, float duty_cycle);
+void motor_step(motor_step_t step, uint32_t duty_cycle);
 void set_commutation_period_us(uint32_t period_us);
 void set_commutation_period_us_63(uint32_t period_us);
 void set_commutation_period_us_255(uint32_t period_us);

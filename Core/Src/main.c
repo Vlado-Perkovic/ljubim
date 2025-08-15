@@ -445,15 +445,16 @@ void SystemClock_Config(void) {
 void handle_zero_crossing(TIM_HandleTypeDef *htim) {
 
   context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
-  context.last_period = context.current_period;
-  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim) - 133;
+  // context.last_period = context.current_period;
+  // context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim) - 133; // 30khz
+  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim) - 100;
   // context.elapsed_cnt_at_bemf = __HAL_TIM_GET_COUNTER(htim);
   context.current_period = __HAL_TIM_GET_AUTORELOAD(htim);
 
-  if ((context.elapsed_cnt_at_bemf > (context.current_period >> 4)) &&
+  if ((context.elapsed_cnt_at_bemf > (context.current_period >> 3)) &&
       (context.elapsed_cnt_at_bemf <
-       (context.current_period - (context.current_period >> 4)))) {
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+       (context.current_period - (context.current_period >>4)))) {
+    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
     safeguard = 1;
     state = BEMF_VALID;
     zc_flag = 1;
@@ -475,7 +476,7 @@ void handle_undershoot(TIM_HandleTypeDef *htim) {
 
   context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
   context.last_period = context.current_period;
-  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_AUTORELOAD(htim) >> 4;
+  context.elapsed_cnt_at_bemf = __HAL_TIM_GET_AUTORELOAD(htim) >> 3;
   context.current_period = __HAL_TIM_GET_AUTORELOAD(htim);
 
   // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
@@ -598,7 +599,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
       /*UNDERSHOOT*/
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
           running && pwm_cnt == 0) {
         if (cmp1 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -624,7 +625,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       old_cmp2 = cmp2;
       cmp2 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
           running && pwm_cnt == 0) {
         if (cmp2 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -650,7 +651,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp3 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
       /*UNDERSHOOT*/
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
           running && pwm_cnt == 0) {
         if (cmp3 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -676,7 +677,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       old_cmp1 = cmp1;
       cmp1 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
           running && pwm_cnt == 0) {
         if (cmp1 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -703,7 +704,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp2 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
       /*UNDERSHOOT*/
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
           running && pwm_cnt == 0) {
         if (cmp2 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -729,7 +730,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp3 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
       /*UNDERSHOOT*/
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 4) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
           running && pwm_cnt == 0) {
         if (cmp3 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);

@@ -2,8 +2,9 @@
 #include "cmsis_os.h" // For osDelay
 #include "main.h"
 #include "stm32g0xx.h"
+#include "stm32g0xx_ll_tim.h"
 #include "tim.h"
-
+#include <stdint.h>
 // Define the motor phases using the HAL TIM channel definitions
 #define PHASE_A TIM_CHANNEL_1
 #define PHASE_B TIM_CHANNEL_2
@@ -17,27 +18,56 @@ typedef uint32_t phase_channel_t;
 volatile OneShotSource_t g_one_shot_source = SOURCE_NONE;
 volatile GPIO_PinState cmp1, cmp2, cmp3 = GPIO_PIN_RESET;
 
-static void set_pwm_duty_cycle(phase_channel_t phase, float percent) {
-  if (percent > 100) {
-    percent = 100;
+static void set_pwm_duty_cycle(phase_channel_t phase, uint32_t per10k) {
+  if (per10k > 10000) {
+    per10k = 10000;
   }
   // The Period is the ARR value, so the max value is Period, not Period+1
-  float duty_cycle = (float)(htim1.Init.Period * percent) / 100;
+  uint32_t duty_cycle = (htim1.Instance->ARR * per10k) / 10000;
   __HAL_TIM_SET_COMPARE(&htim1, phase, duty_cycle);
 }
 
-static void pwm_comp(phase_channel_t phase, float duty_cycle) {
+static void pwm_comp(phase_channel_t phase, uint32_t duty_cycle) {
   set_pwm_duty_cycle(phase, duty_cycle);
-  HAL_TIM_PWM_Start(&htim1, phase);
-  HAL_TIMEx_PWMN_Start(&htim1, phase);
+  // HAL_TIM_PWM_Start(&htim1, phase);
+  // HAL_TIMEx_PWMN_Start(&htim1, phase);
+  switch (phase) {
+
+  case PHASE_A:
+    TIM1->CCER |= (TIM_CCER_CC1E | TIM_CCER_CC1NE);
+    break;
+  case PHASE_B:
+    TIM1->CCER |= (TIM_CCER_CC2E | TIM_CCER_CC2NE);
+    break;
+  case PHASE_C:
+    TIM1->CCER |= (TIM_CCER_CC3E | TIM_CCER_CC3NE);
+    break;
+  }
+  TIM1->BDTR |= TIM_BDTR_MOE;
+  TIM1->CR1 |= TIM_CR1_CEN;
 }
 
 static void pwm_lo(phase_channel_t phase) { pwm_comp(phase, 0); }
-static void pwm_hi(phase_channel_t phase) { pwm_comp(phase, 100); }
+static void pwm_hi(phase_channel_t phase) { pwm_comp(phase, 10000); }
 
 static void pwm_off(phase_channel_t phase) {
-  HAL_TIM_PWM_Stop(&htim1, phase);
-  HAL_TIMEx_PWMN_Stop(&htim1, phase);
+  // HAL_TIM_PWM_Stop(&htim1, phase);
+  // HAL_TIMEx_PWMN_Stop(&htim1, phase);
+  switch (phase) {
+  case PHASE_A: // Corresponds to TIM_CHANNEL_1
+    TIM1->CCER &= ~(TIM_CCER_CC1E | TIM_CCER_CC1NE);
+    break;
+  case PHASE_B: // Corresponds to TIM_CHANNEL_2
+    TIM1->CCER &= ~(TIM_CCER_CC2E | TIM_CCER_CC2NE);
+    break;
+  case PHASE_C: // Corresponds to TIM_CHANNEL_3
+    TIM1->CCER &= ~(TIM_CCER_CC3E | TIM_CCER_CC3NE);
+    break;
+  }
+  TIM1->BDTR &= ~( TIM_BDTR_MOE );
+  TIM1->CR1 &= ~( TIM_CR1_CEN );
+    // __HAL_TIM_MOE_DISABLE(htim);
+    // __HAL_TIM_DISABLE(htim);
 }
 
 void motor_init(void) {
@@ -53,18 +83,18 @@ void motor_init(void) {
 
   // Start the master timer counter
   // HAL_TIM_Base_Start(&htim1);
-  HAL_TIM_Base_Start_IT(&htim1);               // for period elapsed
+  HAL_TIM_Base_Start_IT(&htim1); // for period elapsed
   // HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_1); // for PWM pulse finished
 }
 
-void motor_align(void) {
-  // Energize the rotor into a known position (step 5)
-  // osDelay is acceptable here as it's a one-time, non-real-time operation.
-  motor_step(MOTOR_STEP_5, STARTUP_DUTY_CYCLE);
-  osDelay(1000);
-  motor_step(MOTOR_STEP_6, STARTUP_DUTY_CYCLE);
-  osDelay(1000);
-}
+// void motor_align(void) {
+//   // Energize the rotor into a known position (step 5)
+//   // osDelay is acceptable here as it's a one-time, non-real-time operation.
+//   motor_step(MOTOR_STEP_5, STARTUP_DUTY_CYCLE);
+//   osDelay(1000);
+//   motor_step(MOTOR_STEP_6, STARTUP_DUTY_CYCLE);
+//   osDelay(1000);
+// }
 // (0, 0, 1): 1,
 // (1, 0, 1): 2,
 // (1, 0, 0): 3,
@@ -77,7 +107,7 @@ void motor_align(void) {
 // plavi h2
 // zuti h3
 
-void motor_step(motor_step_t step, float duty_cycle) {
+void motor_step(motor_step_t step, uint32_t duty_cycle) {
   // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
   // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
   // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);

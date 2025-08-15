@@ -21,6 +21,7 @@
 #include "FreeRTOS.h"
 #include "cmsis_os.h"
 #include "main.h"
+#include "stm32g071xx.h"
 #include "stm32g0xx_hal_gpio.h"
 #include "stm32g0xx_hal_tim.h"
 #include "task.h"
@@ -44,7 +45,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PERIOD 200
-#define DUTY_CYCLE 10.5f
+#define DUTY_CYCLE 1050
 #define KI 20
 #define KP 2
 #define ZC_CNT_MIN 3
@@ -108,12 +109,13 @@ volatile uint32_t zc_period = 0;
 volatile uint32_t zc_period_filt = 0;
 volatile uint32_t zc_period_prev = 0;
 volatile uint32_t half = 0;
-// float coef_half = 0.375f; // 7.5deg advance
-float coef_half = 0.325f; // 12deg advance
+float coef_half = 0.375f; // 7.5deg advance
+// float coef_half = 0.35f; // 12deg advance
 // float coef_half = 0.5f; // 0deg advance
-float duty_cycle = DUTY_CYCLE;
+uint32_t duty_cycle = DUTY_CYCLE;
 // volatile float coef_half = 0.35f;
-uint8_t accel = 0;
+uint8_t multiplier = 1;
+
 volatile uint8_t enable_bemf = 0;
 volatile uint8_t scan = 0;
 /* USER CODE END PM */
@@ -237,10 +239,10 @@ void motor_handle_bemf() {
   } else if (state == BEMF_VALID) {
     /* ERR CORRECTION */
     // if (zc_cnt < 2) return;
-    if (zc_cnt >= 1000 && zc_cnt < 1200) {
+    if (zc_cnt < 200) {
 
       // zc_times[zc_cnt] = zc_period_filt;
-      zc_times[zc_cnt - 1000] = context.current_period;
+      zc_times[zc_cnt] = context.current_period;
       // zc_times[zc_cnt] = context.last_period -
       //                    context.last_elapsed_cnt_at_bemf +
       //                    context.elapsed_cnt_at_bemf;
@@ -265,7 +267,6 @@ void motor_handle_bemf() {
   } else if (state == BEMF_OVERSHOOT) {
     /* INCREASE PERIOD */
 
-    accel = 0;
     context.elapsed_cnt_at_bemf =
         context.current_period - (context.current_period >> 4);
     zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
@@ -276,14 +277,16 @@ void motor_handle_bemf() {
     //                  (context.last_steps.queue[1] >> 2) +
     //                  (context.last_steps.queue[2] >> 2) +
     //                  (context.last_steps.queue[3] >> 2);
-    zc_period_filt = 3 * (context.last_steps.queue[0] >> 2) +
-                     (context.last_steps.queue[1] >> 2);
+    zc_period_filt =
+        (context.last_steps.queue[0] >> 2) + (context.last_steps.queue[1] >> 2);
+    // zc_period_filt = zc_period;
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
     // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
     // half = coef_half * zc_period_filt;
     // half = (uint32_t)(coef_half * (float)zc_period_filt);
     zc_period_prev = zc_period;
     context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
+    // HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_8);
     // err = open_loop_period_us / 2;
     // open_loop_period_us += err / KI;
     // timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
@@ -325,12 +328,12 @@ void motor_control_task(void *argument) {
       //                  (context.last_steps.queue[5] >> 3) +
       //                  (context.last_steps.queue[6] >> 3) +
       //                  (context.last_steps.queue[7] >> 3);
-      zc_period_filt = (context.last_steps.queue[0] >> 2) +
-                       (context.last_steps.queue[1] >> 2) +
-                       (context.last_steps.queue[2] >> 2) +
-                       (context.last_steps.queue[3] >> 2);
-      // zc_period_filt = (context.last_steps.queue[0] >> 1) +
-      //                  (context.last_steps.queue[1] >> 1);
+      // zc_period_filt = (context.last_steps.queue[0] >> 2) +
+      //                  (context.last_steps.queue[1] >> 2) +
+      //                  (context.last_steps.queue[2] >> 2) +
+      //                  (context.last_steps.queue[3] >> 2);
+      zc_period_filt = (context.last_steps.queue[0] >> 1) +
+                       (context.last_steps.queue[1] >> 1);
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
 
       half = (uint32_t)(coef_half * (float)zc_period_filt);
@@ -372,18 +375,26 @@ void motor_control_task(void *argument) {
       //   for (int i = 0; i < QUEUE_SIZE; i++)
       //     zc_period_filt += (context.last_steps.queue[i] >> 5);
       // }
-      // zc_period_filt = (context.last_steps.queue[0] >> 1) +
-      //                  (context.last_steps.queue[1] >> 1);
+      zc_period_filt = (context.last_steps.queue[0] >> 1) +
+                       (context.last_steps.queue[1] >> 1);
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
-      zc_period_filt = zc_period;
+      // zc_period_filt = zc_period;
 
-      half = (uint32_t)(coef_half * (float)zc_period_filt);
+      // half = (uint32_t)(coef_half * (float)zc_period_filt);
+      half = 3 * (zc_period_filt >> 3);
       // half = zc_period_filt >> 1;
 
       if (zc_cnt >= ZC_CNT_MIN) {
         context.current_period = context.elapsed_cnt_at_bemf + half;
         __HAL_TIM_SET_AUTORELOAD(&htim3, context.current_period);
       }
+      // if (step_counter == 4999) {
+      HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      // }
+      // if (step_counter == 5000) {
+      //   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+      //   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+      // }
       // printf("per: %ld prev: %ld filt: %ld \r\n", (long)zc_period,
       // (long)zc_period_prev, (long)zc_period_filt);
       zc_period_prev = zc_period;
@@ -516,58 +527,69 @@ void motor_control_task(void *argument) {
       pwm_cnt = 0;
       current_motor_step =
           (motor_step_t)((current_motor_step + 1) % MOTOR_STEP_COUNT);
+      // HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_8);
       motor_step(current_motor_step, duty_cycle);
       state = BEMF_ERROR;
       safeguard = 0;
       pwm_cnt = 0;
       step_counter++;
+      // HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_8);
 
       if (step_counter < 2)
         continue;
       if (step_counter == 2) {
-        // timer_update_prescaler(&htim3, 31, TIMER_UPDATE_IMMEDIATE);
-
         __HAL_TIM_SET_PRESCALER(&htim3, 31);
         continue;
       }
 
       if (step_counter == 3) {
-        open_loop_period_us = 2 * step_times_us[step_counter - 3];
-        set_commutation_period_us_63(open_loop_period_us);
+        multiplier = 2;
+        // open_loop_period_us = multiplier * step_times_us[step_counter - 3];
+        // set_commutation_period_us_63(open_loop_period_us);
         // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
         __HAL_TIM_SET_PRESCALER(&htim3, 15);
-        continue;
+        // continue;
       }
       if (step_counter == 4) {
-        open_loop_period_us = 4 * step_times_us[step_counter - 3];
-        set_commutation_period_us_63(open_loop_period_us);
+        multiplier = 4;
+        // open_loop_period_us = multiplier * step_times_us[step_counter - 3];
+        // set_commutation_period_us_63(open_loop_period_us);
         // timer_update_prescaler(&htim3, 15, TIMER_UPDATE_IMMEDIATE);
         // __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
         __HAL_TIM_SET_PRESCALER(&htim3, 7);
-        continue;
+        // continue;
       }
-      if (step_counter == 8) {
-        open_loop_period_us = 8 * step_times_us[step_counter - 3];
-        set_commutation_period_us_63(open_loop_period_us);
-        // timer_update_prescaler(&htim3, 7, TIMER_UPDATE_IMMEDIATE);
-        continue;
+      if (step_counter == 5) {
+        multiplier = 8;
       }
+      // if (step_counter == 17) {
+      //   // open_loop_period_us = multiplier * step_times_us[step_counter -
+      //   3];
+      //   // set_commutation_period_us_63(open_loop_period_us);
+      //   // timer_update_prescaler(&htim3, 7, TIMER_UPDATE_IMMEDIATE);
+      //   // continue;
+      //   __HAL_TIM_SET_PRESCALER(&htim3, 3);
+      // }
+      // if (step_counter == 18) {
+      //   multiplier = 16;
+      // }
       if (step_counter == 13)
         enable_bemf = 1;
+
+      context.last_period = context.current_period;
 
       // if (open_loop_period_us > 3300 && go == 0) {
       if (zc_cnt < ZC_CNT_MIN && go == 0) {
 
-        open_loop_period_us = 8 * step_times_us[step_counter - 3];
-        set_commutation_period_us_63(open_loop_period_us);
+        context.current_period = multiplier * step_times_us[step_counter - 3];
+        set_commutation_period_us_63(context.current_period);
       } else {
         go = 1;
-        open_loop_period_us =
-            (open_loop_period_us > 30000) ? 30000 : zc_period_filt;
-        context.last_period = context.current_period;
-        context.current_period = open_loop_period_us;
+        context.current_period = (zc_period_filt > multiplier * 4000)
+                                     ? multiplier * 4000
+                                     : zc_period_filt;
 
-        __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
+        __HAL_TIM_SET_AUTORELOAD(&htim3, context.current_period);
       }
 
       if (zc_cnt > 20) {
@@ -577,10 +599,10 @@ void motor_control_task(void *argument) {
       // 0)
       // if (step_counter > 2000 && step_counter < 3000)
       //   duty_cycle += 0.005;
-      // if (step_counter == 2000) {
-      //   duty_cycle += 5;
+      // if (step_counter == 1000) {
+      //   duty_cycle += 2000;
       //   // accel = 1;
-      //   // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       //   // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
       // if (step_counter == 3000) {
@@ -595,9 +617,15 @@ void motor_control_task(void *argument) {
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
-      if (step_counter > 1500 && step_counter < 50000 &&
-          step_counter % 6 == 0 && duty_cycle < 40) {
-        duty_cycle += 0.01;
+      // if (step_counter > 600 && step_counter < 2000 &&
+      //     step_counter % 3 == 0 && duty_cycle < 4000) {
+      //   duty_cycle += 5;
+      // }
+      if (step_counter > 600 && step_counter < 2000 && duty_cycle < 4000) {
+        duty_cycle += 5;
+      }
+      if (step_counter > 2200 && duty_cycle > 2000) {
+        duty_cycle -= 5;
       }
       // if (step_counter == 4000) duty_cycle += 1;
     }
