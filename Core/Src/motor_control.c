@@ -1,24 +1,17 @@
 #include "motor_control.h"
 #include "cmsis_os.h" // For osDelay
 #include "main.h"
-#include "stm32g0xx.h"
-#include "stm32g0xx_ll_tim.h"
 #include "tim.h"
 #include <stdint.h>
-// Define the motor phases using the HAL TIM channel definitions
-#define PHASE_A TIM_CHANNEL_1
-#define PHASE_B TIM_CHANNEL_2
-#define PHASE_C TIM_CHANNEL_3
 
 // Initial duty cycle for open loop startup
 #define STARTUP_DUTY_CYCLE 12
 
-typedef uint32_t phase_channel_t;
 
 volatile OneShotSource_t g_one_shot_source = SOURCE_NONE;
 volatile GPIO_PinState cmp1, cmp2, cmp3 = GPIO_PIN_RESET;
 
-static void set_pwm_duty_cycle(phase_channel_t phase, uint32_t per10k) {
+void set_pwm_duty_cycle(phase_channel_t phase, uint32_t per10k) {
   if (per10k > 10000) {
     per10k = 10000;
   }

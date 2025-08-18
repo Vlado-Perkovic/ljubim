@@ -21,6 +21,7 @@
 #include "FreeRTOS.h"
 #include "cmsis_os.h"
 #include "main.h"
+#include "pid.h"
 #include "stm32g071xx.h"
 #include "stm32g0xx_hal_gpio.h"
 #include "stm32g0xx_hal_tim.h"
@@ -46,9 +47,10 @@
 /* USER CODE BEGIN PD */
 #define PERIOD 200
 #define DUTY_CYCLE 1050
-#define KI 20
-#define KP 2
+#define KI 0
+#define KP 6
 #define ZC_CNT_MIN 3
+#define DT 0.005f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -102,9 +104,13 @@ volatile ctx_t context = {.elapsed_cnt_at_bemf = 0,
                           .last_steps = {.queue = {0}},
                           .last_period = 0};
 uint32_t zc_times[200] = {0};
+uint32_t duty_cycles[200] = {0};
+uint32_t dc_cnt = 0;
+
 extern volatile uint8_t zc_flag;
 extern volatile uint8_t undershoot_flag;
 extern volatile uint8_t commutate_flag;
+extern volatile uint8_t PI_flag;
 
 volatile uint32_t zc_period = 0;
 volatile uint32_t zc_period_filt = 0;
@@ -118,7 +124,15 @@ uint32_t duty_cycle = DUTY_CYCLE;
 uint8_t multiplier = 1;
 
 volatile uint8_t enable_bemf = 0;
+volatile uint8_t closed_loop = 0;
 volatile uint8_t scan = 0;
+
+static PIDController spid;
+volatile uint32_t current_speed;
+volatile uint32_t target_speed = 1600;
+
+const uint32_t RPM_CONSTANT = 11428571;
+uint32_t current_com_period = 0;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -209,34 +223,6 @@ void motor_handle_bemf() {
   int32_t err;
 
   if (state == BEMF_UNDERSHOOT) {
-    /* DECREASE PERIOD */
-    // context.elapsed_cnt_at_bemf = (context.current_period >> 4);
-    // zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
-    //             context.elapsed_cnt_at_bemf;
-    // queue_put(&context.last_steps, zc_period);
-    // // zc_period_filt = zc_period / 2 + zc_period_prev / 2;
-    // // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
-    // // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-    // zc_period_filt = 3 * (context.last_steps.queue[0] >> 2) +
-    //                  (context.last_steps.queue[1] >> 2);
-    // // zc_period_filt = (context.last_steps.queue[0] >> 2) +
-    // //                  (context.last_steps.queue[1] >> 2) +
-    // //                  (context.last_steps.queue[2] >> 2) +
-    // //                  (context.last_steps.queue[3] >> 2);
-    // // zc_period_filt *= 0.8;
-    // half = (uint32_t)(coef_half * (float)zc_period_filt);
-    // zc_period_prev = zc_period;
-    // context.last_elapsed_cnt_at_bemf = context.elapsed_cnt_at_bemf;
-
-    // context.back_to_back = 0;
-    // err = open_loop_period_us / 2;
-    // open_loop_period_us -= err / KI;
-    // timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
-    // if ((__HAL_TIM_GET_COUNTER(&htim3) + err / KP) >= open_loop_period_us) {
-    //   timer_set_counter(&htim3, open_loop_period_us - 1);
-    // } else {
-    //   timer_set_counter(&htim3, err / KP);
-    // }
   } else if (state == BEMF_VALID) {
     /* ERR CORRECTION */
     // if (zc_cnt < 2) return;
@@ -251,20 +237,6 @@ void motor_handle_bemf() {
       // context.last_period, context.current_period);
     }
 
-    // zc_period_n = context.last_period - context.last_elapsed_cnt_at_bemf +
-    //               context.elapsed_cnt_at_bemf;
-
-    // err = context.current_period / 2 - context.elapsed_cnt_at_bemf;
-    // open_loop_period_us = context.current_period - err / KI;
-    // timer_update_period(&htim3, open_loop_period_us, TIMER_UPDATE_IMMEDIATE);
-    // if (err > 0) {
-    //   if ((context.elapsed_cnt_at_bemf + err / KP) >= open_loop_period_us) {
-    //     timer_set_counter(&htim3, open_loop_period_us - 1);
-    //   } else {
-    //     // timer_set_counter(&htim3, context.elapsed_cnt_at_bemf + err / KP);
-    //     timer_set_counter(&htim3, context.elapsed_cnt_at_bemf + err / KP);
-    //   }
-    // }
   } else if (state == BEMF_OVERSHOOT) {
     /* INCREASE PERIOD */
 
@@ -280,6 +252,12 @@ void motor_handle_bemf() {
     //                  (context.last_steps.queue[3] >> 2);
     zc_period_filt =
         (context.last_steps.queue[0] >> 2) + (context.last_steps.queue[1] >> 2);
+    current_com_period =
+        (context.last_steps.queue[0]) + (context.last_steps.queue[1]) +
+        (context.last_steps.queue[2]) + (context.last_steps.queue[3]) +
+        (context.last_steps.queue[4]) + (context.last_steps.queue[5]);
+    current_com_period /= 6;
+    current_speed = RPM_CONSTANT / current_com_period;
     // zc_period_filt = zc_period;
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
     // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
@@ -307,6 +285,8 @@ void motor_control_task(void *argument) {
 
   set_commutation_period_us_255(open_loop_period_us);
   HAL_TIM_Base_Start_IT(&htim3);
+  PID_init(&spid, KP, KI, 0, 6000);
+  HAL_TIM_Base_Start_IT(&htim17);
   // HAL_COMP_Start(&hcomp1);
   int cnt = 0;
   uint32_t err;
@@ -335,6 +315,7 @@ void motor_control_task(void *argument) {
       //                  (context.last_steps.queue[3] >> 2);
       zc_period_filt = (context.last_steps.queue[0] >> 1) +
                        (context.last_steps.queue[1] >> 1);
+      current_speed = RPM_CONSTANT / zc_period_filt;
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
 
       half = (uint32_t)(coef_half * (float)zc_period_filt);
@@ -378,6 +359,8 @@ void motor_control_task(void *argument) {
       // }
       zc_period_filt = (context.last_steps.queue[0] >> 1) +
                        (context.last_steps.queue[1] >> 1);
+
+      current_speed = RPM_CONSTANT / zc_period_filt;
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
       // zc_period_filt = zc_period;
 
@@ -401,6 +384,35 @@ void motor_control_task(void *argument) {
       zc_period_prev = zc_period;
     }
 
+    if (PI_flag) {
+      if (running) {
+        duty_cycle = calculatePID(&spid, target_speed, current_speed, DT);
+        if (dc_cnt < 200)
+          duty_cycles[dc_cnt++] = duty_cycle;
+
+        switch (current_motor_step) {
+
+        case MOTOR_STEP_1:
+          set_pwm_duty_cycle(PHASE_A, duty_cycle);
+          break;
+        case MOTOR_STEP_2:
+          set_pwm_duty_cycle(PHASE_A, duty_cycle);
+          break;
+        case MOTOR_STEP_3:
+          set_pwm_duty_cycle(PHASE_B, duty_cycle);
+          break;
+        case MOTOR_STEP_4:
+          set_pwm_duty_cycle(PHASE_B, duty_cycle);
+          break;
+        case MOTOR_STEP_5:
+          set_pwm_duty_cycle(PHASE_C, duty_cycle);
+          break;
+        case MOTOR_STEP_6:
+          set_pwm_duty_cycle(PHASE_C, duty_cycle);
+          break;
+        }
+      }
+    }
     // if (ulTaskNotifyTake(pdTRUE, 0)) {
     if (commutate_flag) {
       // if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY)) {
@@ -623,12 +635,12 @@ void motor_control_task(void *argument) {
       //     step_counter % 3 == 0 && duty_cycle < 4000) {
       //   duty_cycle += 5;
       // }
-      if (step_counter > 600 && step_counter < 2000 && duty_cycle < 4000) {
-        duty_cycle += 5;
-      }
-      if (step_counter > 2200 && duty_cycle > 800) {
-        duty_cycle -= 5;
-      }
+      // if (step_counter > 600 && step_counter < 2000 && duty_cycle < 4000) {
+      //   duty_cycle += 5;
+      // }
+      // if (step_counter > 2200 && duty_cycle > 800) {
+      //   duty_cycle -= 5;
+      // }
       // if (step_counter == 4000) duty_cycle += 1;
     }
   }

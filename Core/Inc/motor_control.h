@@ -3,6 +3,13 @@
 
 #include "stdint.h"
 #include "utils.h"
+#include "stm32g0xx.h"
+#include "stm32g0xx_ll_tim.h"
+
+#define PHASE_A TIM_CHANNEL_1
+#define PHASE_B TIM_CHANNEL_2
+#define PHASE_C TIM_CHANNEL_3
+typedef uint32_t phase_channel_t;
 
 typedef enum {
   MOTOR_STEP_1, // A->B ----- C 
@@ -43,6 +50,7 @@ typedef struct {
 void motor_init(void);
 void motor_align(void);
 void motor_step(motor_step_t step, uint32_t duty_cycle);
+void set_pwm_duty_cycle(phase_channel_t phase, uint32_t per10k);
 void set_commutation_period_us(uint32_t period_us);
 void set_commutation_period_us_63(uint32_t period_us);
 void set_commutation_period_us_255(uint32_t period_us);

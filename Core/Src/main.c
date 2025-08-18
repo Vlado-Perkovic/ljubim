@@ -142,6 +142,7 @@ volatile uint32_t zc_cnt = 0;
 volatile uint8_t zc_flag = 0;
 volatile uint8_t undershoot_flag = 0;
 volatile uint8_t commutate_flag = 0;
+volatile uint8_t PI_flag = 0;
 volatile uint8_t pwm_cnt = 0;
 // volatile uint8_t is_zero_crossing_detected = 0;
 
@@ -587,6 +588,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     htim15.Instance->CR1 |= TIM_CR1_OPM; // One Pulse Mode
 
     HAL_TIM_Base_Start_IT(&htim15);
+  }
+  if (htim->Instance == TIM17) {
+
+    PI_flag = 1;
   }
   if (htim->Instance == TIM15 && enable_bemf) {
     // if (htim->Instance == TIM1 && enable_bemf) {

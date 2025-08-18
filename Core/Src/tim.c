@@ -43,15 +43,16 @@ void MX_TIM1_Init(void)
   TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
+  // htim1.Init.Period = 3199; // 20khz
+  htim1.Init.Period = 2123; // 30khz
+  // htim1.Init.Period = 1800; // 40khz
+  // htim1.Init.Period = 1600; // 40khz
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  // htim1.Init.Period = 3199; // 20khz
-  htim1.Init.Period = 2123; // 30khz
-  // htim1.Init.Period = 1800; // 40khz
-  // htim1.Init.Period = 1600; // 40khz
+  htim1.Init.Period = 2123;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -169,7 +170,6 @@ void MX_TIM15_Init(void)
   TIM_MasterConfigTypeDef sMasterConfig = {0};
 
   /* USER CODE BEGIN TIM15_Init 1 */
-
   /* USER CODE END TIM15_Init 1 */
   htim15.Instance = TIM15;
   htim15.Init.Prescaler = 0;
@@ -214,9 +214,9 @@ void MX_TIM17_Init(void)
 
   /* USER CODE END TIM17_Init 1 */
   htim17.Instance = TIM17;
-  htim17.Init.Prescaler = 0;
+  htim17.Init.Prescaler = 159;
   htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim17.Init.Period = 65535;
+  htim17.Init.Period = 1999;
   htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim17.Init.RepetitionCounter = 0;
   htim17.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -310,6 +310,10 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
 
     /* TIM17 clock enable */
     __HAL_RCC_TIM17_CLK_ENABLE();
+
+    /* TIM17 interrupt Init */
+    HAL_NVIC_SetPriority(TIM17_IRQn, 3, 0);
+    HAL_NVIC_EnableIRQ(TIM17_IRQn);
   /* USER CODE BEGIN TIM17_MspInit 1 */
 
   /* USER CODE END TIM17_MspInit 1 */
@@ -409,6 +413,9 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
   /* USER CODE END TIM17_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_TIM17_CLK_DISABLE();
+
+    /* TIM17 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(TIM17_IRQn);
   /* USER CODE BEGIN TIM17_MspDeInit 1 */
 
   /* USER CODE END TIM17_MspDeInit 1 */
