@@ -104,6 +104,7 @@ volatile ctx_t context = {.elapsed_cnt_at_bemf = 0,
 uint32_t zc_times[200] = {0};
 extern volatile uint8_t zc_flag;
 extern volatile uint8_t undershoot_flag;
+extern volatile uint8_t commutate_flag;
 
 volatile uint32_t zc_period = 0;
 volatile uint32_t zc_period_filt = 0;
@@ -400,9 +401,10 @@ void motor_control_task(void *argument) {
       zc_period_prev = zc_period;
     }
 
-    if (ulTaskNotifyTake(pdTRUE, 0)) {
+    // if (ulTaskNotifyTake(pdTRUE, 0)) {
+    if (commutate_flag) {
       // if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY)) {
-
+      commutate_flag = 0;
       // #TODO: safeguard == is_bemf_detected
       if (go) {
 
@@ -624,7 +626,7 @@ void motor_control_task(void *argument) {
       if (step_counter > 600 && step_counter < 2000 && duty_cycle < 4000) {
         duty_cycle += 5;
       }
-      if (step_counter > 2200 && duty_cycle > 2000) {
+      if (step_counter > 2200 && duty_cycle > 800) {
         duty_cycle -= 5;
       }
       // if (step_counter == 4000) duty_cycle += 1;

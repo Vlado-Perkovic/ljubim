@@ -141,6 +141,7 @@ volatile uint8_t safeguard = 0;
 volatile uint32_t zc_cnt = 0;
 volatile uint8_t zc_flag = 0;
 volatile uint8_t undershoot_flag = 0;
+volatile uint8_t commutate_flag = 0;
 volatile uint8_t pwm_cnt = 0;
 // volatile uint8_t is_zero_crossing_detected = 0;
 
@@ -757,18 +758,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   /* USER CODE BEGIN Callback 1 */
   if (htim->Instance == TIM3) {
 
-    // commutate_flag = 1;
+    commutate_flag = 1;
 
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-    // Notify the motor control task that it is time to commutate
-    if (motor_control_hndl != NULL) {
-      vTaskNotifyGiveFromISR((TaskHandle_t)motor_control_hndl,
-                             &xHigherPriorityTaskWoken);
-    }
-
-    // If the notification woke up a higher-priority task, yield the CPU
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    // BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    //
+    // // Notify the motor control task that it is time to commutate
+    // if (motor_control_hndl != NULL) {
+    //   vTaskNotifyGiveFromISR((TaskHandle_t)motor_control_hndl,
+    //                          &xHigherPriorityTaskWoken);
+    // }
+    //
+    // // If the notification woke up a higher-priority task, yield the CPU
+    // portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 
   /* USER CODE END Callback 1 */
