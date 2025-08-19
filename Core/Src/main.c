@@ -29,7 +29,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "motor_control.h"
-#include "tim.h"
 #include "timer_utils.h"
 #include "utils.h"
 #include <stdint.h>

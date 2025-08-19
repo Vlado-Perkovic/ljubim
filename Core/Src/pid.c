@@ -1,64 +1,55 @@
 #include "pid.h"
 
-// Function to initialize a PID controller
-void PID_init(PIDController *pid, float Kp, float Ki, uint32_t Kd,
-              uint32_t output_limit) {
-  pid->Kp = Kp;
-  pid->Ki = Ki;
-  pid->Kd = Kd;
-  pid->error_sum = 0.0f;
-  pid->last_error = 0.0f;
+void PID_init(PIDController *pid, int32_t Kp_Q12, int32_t Ki_Q12,
+              int32_t Kd_Q12, int32_t output_limit) {
+  pid->Kp = Kp_Q12;
+  pid->Ki = Ki_Q12;
+  pid->Kd = Kd_Q12;
+
+  pid->error_sum = 0;
+  pid->last_error = 0;
+
   pid->output_limit = output_limit;
+  pid->integral_limit = ONE_Q12; // ±1.0 per-unit
 }
 
-/**
- * @brief Calculates the PID controller output.
- *
- * This function computes the output of a PID controller by applying the
- * proportional, integral, and derivative terms. It also limits the output to
- * a specified maximum value to prevent excessive control actions.
- *
- * @param pid Pointer to the PIDController structure.
- * @param target_speed The desired target speed.
- * @param current_speed The current measured speed.
- * @param dt The time step (in seconds) since the last update.
- * @return The PID controller output value.
- */
-uint32_t calculatePID(PIDController *pid, uint32_t target_speed,
-                    uint32_t current_speed, float dt) {
-  // Calculate error
-  uint32_t error = target_speed - current_speed;
+int32_t PID_calculate(PIDController *pid, int32_t setpoint,
+                      int32_t measurement) {
+  // Error in counts
+  int32_t error_counts = setpoint - measurement;
 
-  // Proportional term
-  uint32_t proportional = pid->Kp * error;
+  // Normalize error to per-unit Q12
+  int32_t error_q12 = ((int64_t)error_counts << Q) / INPUT_SCALE;
 
-  // Integral with windup guard
-  pid->error_sum += error * dt;
+  // --- Proportional ---
+  int32_t P_q12 = ((int64_t)pid->Kp * error_q12) >> Q;
+
+  // --- Integral ---
+  pid->error_sum += ((int64_t)pid->Ki * error_q12) >> Q;
+  // Clamp integrator (±1.0 per-unit)
   if (pid->error_sum > pid->integral_limit)
     pid->error_sum = pid->integral_limit;
   if (pid->error_sum < -pid->integral_limit)
     pid->error_sum = -pid->integral_limit;
-  uint32_t integral = pid->Ki * pid->error_sum;
+  int32_t I_q12 = pid->error_sum;
 
-  // pid->last_error = error;
+  // --- Derivative (optional, currently off) ---
+  // int32_t dErr = error_q12 - pid->last_error;
+  // pid->last_error = error_q12;
+  // int32_t D_q12 = ((int64_t)pid->Kd * dErr) >> Q;
+  int32_t D_q12 = 0;
 
-  // DERIVATIVE ON MEASUREMENT (no derivative kick)
-  // uint32_t derivative_raw = (current_speed - pid->last_measurement) / dt;
-  // pid->last_measurement = current_speed;
+  // --- Total output in per-unit Q12 ---
+  int32_t u_q12 = P_q12 + I_q12 + D_q12;
 
-  // Low‑pass filter for derivative
-  // uint32_t alpha = dt / (pid->tau + dt);
-  // pid->derivative_filtered =
-  //     (1 - alpha) * pid->derivative_filtered + alpha * derivative_raw;
-  // uint32_t derivative = -pid->Kd * pid->derivative_filtered;
+  int32_t raw =
+      (int32_t)(((int64_t)u_q12 * DUTY_RANGE) >> Q); // 0..DUTY_RANGE (Q12->int)
+  int32_t output = raw + DUTY_MIN;
 
-  // Raw PID output
-  // uint32_t pid_output = proportional + integral + derivative;
-  uint32_t pid_output = proportional + integral;
-
-  // Limit the PID output
-  pid_output = fmaxf(900, fminf(pid_output, pid->output_limit));
-
-  return pid_output;
+  // Clamp
+  if (output > DUTY_MAX)
+    output = DUTY_MAX;
+  if (output < DUTY_MIN)
+    output = DUTY_MIN;
+  return output;
 }
-
