@@ -46,15 +46,16 @@
 /* USER CODE BEGIN PD */
 #define PERIOD 200
 #define DUTY_CYCLE 1050
-#define KI 0.01f
-#define KP 5
+#define KI 0.05f
+#define KP 30
 // #define KP_Q12 (int32_t)(0.5 * (1 << Q))   // ≈ 2048
 // #define KI_Q12 (int32_t)(0.020 * (1 << Q)) // ≈ 82
 // #define KD_Q12 0
 #define ZC_CNT_MIN 3
 #define DT 0.005f
-#define COEF_HALF 0.4f
+#define COEF_HALF 0.375f
 /* USER CODE END PD */
+
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
@@ -108,7 +109,7 @@ volatile ctx_t context = {.elapsed_cnt_at_bemf = 0,
                           .last_period = 0};
 uint32_t zc_times[200] = {0};
 uint32_t duty_cycles[200] = {0};
-uint32_t speeds[300] = {0};
+uint32_t speeds[1000] = {0};
 uint32_t dc_cnt = 0, cs = 0;
 
 extern volatile uint8_t zc_flag;
@@ -133,7 +134,7 @@ volatile uint8_t scan = 0;
 
 static PIDController spid;
 volatile uint32_t current_speed;
-volatile uint32_t target_speed = 2000;
+volatile uint16_t target_speed = 500;
 
 const uint32_t RPM_CONSTANT = 11428571;
 uint32_t current_com_period = 0;
@@ -377,8 +378,8 @@ void motor_control_task(void *argument) {
           (context.last_steps.queue[4]) + (context.last_steps.queue[5]);
       current_com_period /= 6;
 
-      current_speed = RPM_CONSTANT / zc_period_filt;
-      if (cs < 300 && zc_cnt > 1000) {
+      current_speed = RPM_CONSTANT / current_com_period;
+      if (cs < 1000) {
         speeds[cs++] = current_speed;
       }
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
@@ -628,8 +629,11 @@ void motor_control_task(void *argument) {
         __HAL_TIM_SET_AUTORELOAD(&htim3, context.current_period);
       }
 
-      if (zc_cnt > 100) {
+      if (zc_cnt > 400) {
         running = 1;
+      }
+      if (zc_cnt > 500) {
+        target_speed = 1200;
       }
       // if (step_counter > 2000 && step_counter < 3000 && step_counter % 2 ==
       // 0)
