@@ -208,7 +208,6 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-  // defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -660,7 +659,7 @@ void motor_control_task(void *argument) {
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
       if (step_counter > 600 &&
-          step_counter % 3 == 0 && duty_cycle < 8000) {
+          step_counter % 3 == 0 && duty_cycle < 8625) {
         duty_cycle += 5;
       }
       // if (step_counter > 1000 ) {
