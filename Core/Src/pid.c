@@ -25,7 +25,7 @@ int32_t PID_calculate(PIDController *pid, int32_t setpoint,
   int32_t P_q12 = ((int64_t)pid->Kp * error_q12) >> Q;
 
   // --- Integral ---
-  pid->error_sum += ((int64_t)pid->Ki * error_q12) >> Q;
+  // pid->error_sum += ((int64_t)pid->Ki * error_q12) >> Q;
   // Clamp integrator (±1.0 per-unit)
   if (pid->error_sum > pid->integral_limit)
     pid->error_sum = pid->integral_limit;
@@ -47,9 +47,21 @@ int32_t PID_calculate(PIDController *pid, int32_t setpoint,
   int32_t output = raw + DUTY_MIN;
 
   // Clamp
-  if (output > DUTY_MAX)
-    output = DUTY_MAX;
-  if (output < DUTY_MIN)
-    output = DUTY_MIN;
-  return output;
+  int32_t clamped_output = output;
+  if (clamped_output > DUTY_MAX) {
+    clamped_output = DUTY_MAX;
+  }
+  if (clamped_output < DUTY_MIN) {
+    clamped_output = DUTY_MIN;
+  }
+
+  if (output == clamped_output) {
+    pid->error_sum += ((int64_t)pid->Ki * error_q12) >> Q;
+    // Optional: You can still clamp the error_sum here as a failsafe
+    if (pid->error_sum > pid->integral_limit)
+      pid->error_sum = pid->integral_limit;
+    if (pid->error_sum < -pid->integral_limit)
+      pid->error_sum = -pid->integral_limit;
+  }
+  return clamped_output;
 }

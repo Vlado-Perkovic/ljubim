@@ -46,15 +46,12 @@
 /* USER CODE BEGIN PD */
 #define PERIOD 200
 #define DUTY_CYCLE 1150
-#define KI 0
-#define KP 1
-// #define KP_Q12 (int32_t)(0.5 * (1 << Q))   // ≈ 2048
-// #define KI_Q12 (int32_t)(0.020 * (1 << Q)) // ≈ 82
-// #define KD_Q12 0
+#define KI 0.01f
+#define KP 5
 #define ZC_CNT_MIN 3
 #define DT 0.005f
-// #define COEF_HALF 0.375f
-#define COEF_HALF 0.4f
+#define COEF_HALF 0.375f
+// #define COEF_HALF 0.4f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -355,11 +352,11 @@ void motor_control_task(void *argument) {
 
     if (zc_flag == 1) {
       zc_flag = 0;
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
       zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
                   context.elapsed_cnt_at_bemf;
       queue_put(&context.last_steps, zc_period);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
 
       // zc_period_filt = zc_period/2 + zc_period_prev/2;
       // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
@@ -389,7 +386,7 @@ void motor_control_task(void *argument) {
           (context.last_steps.queue[2]) + (context.last_steps.queue[3]) +
           (context.last_steps.queue[4]) + (context.last_steps.queue[5]);
       current_com_period /= 6;
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 
       current_speed = RPM_CONSTANT / current_com_period;
       if (cs < 1000) {
@@ -398,10 +395,10 @@ void motor_control_task(void *argument) {
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
       // zc_period_filt = zc_period;
 
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
       half = (uint32_t)(coef_half * (float)zc_period_filt);
       // half = 3 * (zc_period_filt >> 3);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
       // half = zc_period_filt >> 1;
 
       if (zc_cnt >= ZC_CNT_MIN) {
@@ -443,6 +440,7 @@ void motor_control_task(void *argument) {
     }
     if (commutate_flag) {
       commutate_flag = 0;
+        // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       if (go) {
 
         switch (current_motor_step) {
@@ -659,7 +657,7 @@ void motor_control_task(void *argument) {
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
       if (step_counter > 600 &&
-          step_counter % 3 == 0 && duty_cycle < 8625) {
+          step_counter % 3 == 0 && duty_cycle < 8500) {
         duty_cycle += 5;
       }
       // if (step_counter > 1000 ) {

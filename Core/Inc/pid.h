@@ -8,12 +8,11 @@
 #define ONE_Q12 (1 << Q)
 
 // Normalization constants
-#define INPUT_SCALE   3000    // counts (range of your sensor)
-#define OUTPUT_SCALE  10000    // duty units (0–10000)
+#define INPUT_SCALE   3800    // counts (range of your sensor)
 
 #define DUTY_MIN     1050
-#define DUTY_MAX     6000
-#define DUTY_RANGE   (DUTY_MAX - DUTY_MIN)  // 9100
+#define DUTY_MAX     8000
+#define DUTY_RANGE   (DUTY_MAX - DUTY_MIN)
 //
 // PID controller struct
 typedef struct {

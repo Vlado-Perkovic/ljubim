@@ -462,8 +462,8 @@ void handle_zero_crossing(TIM_HandleTypeDef *htim) {
   if ((context.elapsed_cnt_at_bemf > (context.current_period >> 3)) &&
       (context.elapsed_cnt_at_bemf <
        (context.current_period - (context.current_period >> 4)))) {
-    // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
     safeguard = 1;
     state = BEMF_VALID;
     zc_flag = 1;
