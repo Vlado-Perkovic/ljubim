@@ -20,11 +20,10 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "comp.h"
-#include "gpio.h"
-#include "stm32g0xx_hal_gpio.h"
-#include "stm32g0xx_hal_tim.h"
+#include "dma.h"
 #include "tim.h"
 #include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -118,6 +117,10 @@ extern volatile bemf_case_t state;
 extern volatile ctx_t context;
 extern volatile uint8_t enable_bemf;
 extern volatile uint8_t scan;
+
+extern volatile uint16_t target_speed;
+uint8_t rx_buf[2];
+uint8_t tx_buf[2];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -152,10 +155,11 @@ int _write(int file, char *ptr, int len) {
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
-int main(void) {
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
 
   /* USER CODE BEGIN 1 */
 
@@ -163,8 +167,7 @@ int main(void) {
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick.
-   */
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -180,6 +183,7 @@ int main(void) {
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM1_Init();
   MX_USART2_UART_Init();
   MX_TIM3_Init();
@@ -400,20 +404,21 @@ int main(void) {
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
-void SystemClock_Config(void) {
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-   */
+  */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-   * in the RCC_OscInitTypeDef structure.
-   */
+  * in the RCC_OscInitTypeDef structure.
+  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
@@ -425,19 +430,21 @@ void SystemClock_Config(void) {
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV4;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-   */
-  RCC_ClkInitStruct.ClockType =
-      RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1;
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
     Error_Handler();
   }
 }
@@ -454,8 +461,9 @@ void handle_zero_crossing(TIM_HandleTypeDef *htim) {
 
   if ((context.elapsed_cnt_at_bemf > (context.current_period >> 3)) &&
       (context.elapsed_cnt_at_bemf <
-       (context.current_period - (context.current_period >>4)))) {
+       (context.current_period - (context.current_period >> 4)))) {
     // HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
     safeguard = 1;
     state = BEMF_VALID;
     zc_flag = 1;
@@ -566,18 +574,27 @@ void handle_undershoot(TIM_HandleTypeDef *htim) {
 //   }
 //   prev_state = state;
 // }
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart->Instance == USART2) {
+    // combine 2 bytes into 16-bit integer
+    target_speed = (rx_buf[1] << 8) | rx_buf[0];
 
+    // restart DMA reception
+    HAL_UART_Receive_DMA(&huart2, rx_buf, 2);
+  }
+}
 /* USER CODE END 4 */
 
 /**
- * @brief  Period elapsed callback in non blocking mode
- * @note   This function is called  when TIM16 interrupt took place, inside
- * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
- * a global variable "uwTick" used as application time base.
- * @param  htim : TIM handle
- * @retval None
- */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM16 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
   /* USER CODE BEGIN Callback 0 */
   if (htim->Instance == TIM1) {
     HAL_TIM_Base_Stop_IT(&htim15);
@@ -604,7 +621,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, cmp1);
       /*UNDERSHOOT*/
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 3) &&
           running && pwm_cnt == 0) {
         if (cmp1 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -630,7 +647,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       old_cmp2 = cmp2;
       cmp2 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 3) &&
           running && pwm_cnt == 0) {
         if (cmp2 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -656,7 +673,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp3 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
       /*UNDERSHOOT*/
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 3) &&
           running && pwm_cnt == 0) {
         if (cmp3 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -682,7 +699,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       old_cmp1 = cmp1;
       cmp1 = HAL_GPIO_ReadPin(CMP1_GPIO_Port, CMP1_Pin);
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 3) &&
           running && pwm_cnt == 0) {
         if (cmp1 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -709,7 +726,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp2 = HAL_GPIO_ReadPin(CMP2_GPIO_Port, CMP2_Pin);
       /*UNDERSHOOT*/
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 3) &&
           running && pwm_cnt == 0) {
         if (cmp2 == GPIO_PIN_SET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -735,7 +752,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       cmp3 = HAL_GPIO_ReadPin(CMP3_GPIO_Port, CMP3_Pin);
       /*UNDERSHOOT*/
       if (__HAL_TIM_GET_COUNTER(&htim3) >
-              (__HAL_TIM_GET_AUTORELOAD(&htim3) >>3) &&
+              (__HAL_TIM_GET_AUTORELOAD(&htim3) >> 3) &&
           running && pwm_cnt == 0) {
         if (cmp3 == GPIO_PIN_RESET && safeguard == 0) {
           handle_undershoot(&htim3);
@@ -756,7 +773,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   }
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM16) {
+  if (htim->Instance == TIM16)
+  {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
@@ -780,10 +798,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 }
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
@@ -792,15 +811,16 @@ void Error_Handler(void) {
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef USE_FULL_ASSERT
+#ifdef  USE_FULL_ASSERT
 /**
- * @brief  Reports the name of the source file and the source line number
- *         where the assert_param error has occurred.
- * @param  file: pointer to the source file name
- * @param  line: assert_param error line source number
- * @retval None
- */
-void assert_failed(uint8_t *file, uint32_t line) {
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line
      number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,

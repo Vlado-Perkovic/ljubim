@@ -25,16 +25,16 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "comp.h"
+#include "motor_control.h"
+#include "pid.h"
 #include "stm32g071xx.h"
 #include "stm32g0xx_hal_gpio.h"
 #include "stm32g0xx_hal_tim.h"
-#include "comp.h"
-#include "motor_control.h"
-#include "tim.h"
+// #include "tim.h"
 #include "timer_utils.h"
 #include <stdint.h>
 #include <stdio.h>
-#include "pid.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,17 +45,17 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PERIOD 200
-#define DUTY_CYCLE 1050
-#define KI 0.05f
-#define KP 30
+#define DUTY_CYCLE 1150
+#define KI 0
+#define KP 1
 // #define KP_Q12 (int32_t)(0.5 * (1 << Q))   // ≈ 2048
 // #define KI_Q12 (int32_t)(0.020 * (1 << Q)) // ≈ 82
 // #define KD_Q12 0
 #define ZC_CNT_MIN 3
 #define DT 0.005f
-#define COEF_HALF 0.375f
+// #define COEF_HALF 0.375f
+#define COEF_HALF 0.4f
 /* USER CODE END PD */
-
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
@@ -94,6 +94,14 @@ extern volatile uint8_t safeguard;
 extern volatile uint8_t pwm_cnt;
 extern void handle_zero_crossing(TIM_HandleTypeDef *htim);
 extern volatile uint32_t zc_cnt;
+extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim1;
+extern TIM_HandleTypeDef htim15;
+extern TIM_HandleTypeDef htim17;
+
+extern UART_HandleTypeDef huart2;
+extern uint8_t rx_buf[2];
+extern uint8_t tx_buf[2];
 
 uint32_t open_loop_period_us = ALIGN_TIMEOUT_US;
 volatile motor_step_t current_motor_step = MOTOR_STEP_4;
@@ -133,8 +141,8 @@ volatile uint8_t closed_loop = 0;
 volatile uint8_t scan = 0;
 
 static PIDController spid;
-volatile uint32_t current_speed;
-volatile uint16_t target_speed = 500;
+volatile uint16_t current_speed;
+volatile uint16_t target_speed = 600;
 
 const uint32_t RPM_CONSTANT = 11428571;
 uint32_t current_com_period = 0;
@@ -160,6 +168,12 @@ const osThreadAttr_t defaultTask_attributes = {
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 void motor_control_task(void *argument);
+void transmit_current_speed(uint16_t speed) {
+    tx_buf[0] = speed & 0xFF;
+    tx_buf[1] = (speed >> 8) & 0xFF;
+
+    HAL_UART_Transmit_DMA(&huart2, tx_buf, 2);
+}
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void *argument);
@@ -194,6 +208,7 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* creation of defaultTask */
+  // defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -253,11 +268,6 @@ void motor_handle_bemf() {
     zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
                 context.elapsed_cnt_at_bemf;
     queue_put(&context.last_steps, zc_period);
-    // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
-    // zc_period_filt = (context.last_steps.queue[0] >> 2) +
-    //                  (context.last_steps.queue[1] >> 2) +
-    //                  (context.last_steps.queue[2] >> 2) +
-    //                  (context.last_steps.queue[3] >> 2);
     zc_period_filt =
         (context.last_steps.queue[0] >> 2) + (context.last_steps.queue[1] >> 2);
     current_com_period =
@@ -265,7 +275,7 @@ void motor_handle_bemf() {
         (context.last_steps.queue[2]) + (context.last_steps.queue[3]) +
         (context.last_steps.queue[4]) + (context.last_steps.queue[5]);
     current_com_period /= 6;
-    current_speed = RPM_CONSTANT / current_com_period;
+    current_speed = (uint32_t)(RPM_CONSTANT / current_com_period);
     // zc_period_filt = zc_period;
     // zc_period_filt = (zc_period >> 2) + 3*(zc_period_prev >> 2);
     // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
@@ -299,7 +309,8 @@ void motor_control_task(void *argument) {
   int32_t Kd_Q12 = 0;
 
   PID_init(&spid, Kp_Q12, Ki_Q12, Kd_Q12, DUTY_MAX);
-  HAL_TIM_Base_Start_IT(&htim17);
+  // HAL_TIM_Base_Start_IT(&htim17);
+  HAL_UART_Receive_DMA(&huart2, rx_buf, 2); // expecting 2 bytes
   // HAL_COMP_Start(&hcomp1);
   int cnt = 0;
   uint32_t err;
@@ -345,9 +356,11 @@ void motor_control_task(void *argument) {
 
     if (zc_flag == 1) {
       zc_flag = 0;
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
       zc_period = context.last_period - context.last_elapsed_cnt_at_bemf +
                   context.elapsed_cnt_at_bemf;
       queue_put(&context.last_steps, zc_period);
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
 
       // zc_period_filt = zc_period/2 + zc_period_prev/2;
       // zc_period_filt = (zc_period >> 1) + (zc_period_prev >> 1);
@@ -377,6 +390,7 @@ void motor_control_task(void *argument) {
           (context.last_steps.queue[2]) + (context.last_steps.queue[3]) +
           (context.last_steps.queue[4]) + (context.last_steps.queue[5]);
       current_com_period /= 6;
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 
       current_speed = RPM_CONSTANT / current_com_period;
       if (cs < 1000) {
@@ -385,23 +399,16 @@ void motor_control_task(void *argument) {
       // zc_period_filt = 3*(zc_period >> 2) + (zc_period_prev >> 2);
       // zc_period_filt = zc_period;
 
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
       half = (uint32_t)(coef_half * (float)zc_period_filt);
       // half = 3 * (zc_period_filt >> 3);
+      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
       // half = zc_period_filt >> 1;
 
       if (zc_cnt >= ZC_CNT_MIN) {
         context.current_period = context.elapsed_cnt_at_bemf + half;
         __HAL_TIM_SET_AUTORELOAD(&htim3, context.current_period);
       }
-      // if (step_counter == 4999) {
-      HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
-      // }
-      // if (step_counter == 5000) {
-      //   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
-      //   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
-      // }
-      // printf("per: %ld prev: %ld filt: %ld \r\n", (long)zc_period,
-      // (long)zc_period_prev, (long)zc_period_filt);
       zc_period_prev = zc_period;
     }
 
@@ -433,14 +440,10 @@ void motor_control_task(void *argument) {
           break;
         }
 
-        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       }
     }
-    // if (ulTaskNotifyTake(pdTRUE, 0)) {
     if (commutate_flag) {
-      // if (ulTaskNotifyTake(pdTRUE, portMAX_DELAY)) {
       commutate_flag = 0;
-      // #TODO: safeguard == is_bemf_detected
       if (go) {
 
         switch (current_motor_step) {
@@ -615,7 +618,6 @@ void motor_control_task(void *argument) {
 
       context.last_period = context.current_period;
 
-      // if (open_loop_period_us > 3300 && go == 0) {
       if (zc_cnt < ZC_CNT_MIN && go == 0) {
 
         context.current_period = multiplier * step_times_us[step_counter - 3];
@@ -624,7 +626,7 @@ void motor_control_task(void *argument) {
         go = 1;
         context.current_period = (zc_period_filt > multiplier * 4000)
                                      ? multiplier * 4000
-                                     : zc_period_filt;
+                                     : 2*zc_period_filt;
 
         __HAL_TIM_SET_AUTORELOAD(&htim3, context.current_period);
       }
@@ -632,9 +634,9 @@ void motor_control_task(void *argument) {
       if (zc_cnt > 400) {
         running = 1;
       }
-      if (zc_cnt > 500) {
-        target_speed = 1200;
-      }
+      // if (zc_cnt > 500) {
+      //   target_speed = 1500;
+      // }
       // if (step_counter > 2000 && step_counter < 3000 && step_counter % 2 ==
       // 0)
       // if (step_counter > 2000 && step_counter < 3000)
@@ -657,10 +659,10 @@ void motor_control_task(void *argument) {
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
-      // if (step_counter > 600 &&
-      //     step_counter % 3 == 0 && duty_cycle < 8000) {
-      //   duty_cycle += 5;
-      // }
+      if (step_counter > 600 &&
+          step_counter % 3 == 0 && duty_cycle < 8000) {
+        duty_cycle += 5;
+      }
       // if (step_counter > 1000 ) {
       //   target_speed = 1500;
       // }
@@ -668,6 +670,13 @@ void motor_control_task(void *argument) {
       //   duty_cycle -= 5;
       // }
       // if (step_counter == 600) duty_cycle += 5000;
+      if (step_counter % 420 == 0) {
+        transmit_current_speed(current_speed);
+
+        if (step_counter > 2<<20) {
+          step_counter = 100;
+        }
+      }
     }
   }
 }
