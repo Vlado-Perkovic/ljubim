@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
 #include "comp.h"
 #include "dma.h"
 #include "tim.h"
@@ -28,8 +27,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "motor_control.h"
-#include "timer_utils.h"
-#include "utils.h"
 #include <stdint.h>
 #include <stdio.h>
 /* USER CODE END Includes */
@@ -66,7 +63,6 @@ uint8_t tx_buf[2];
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 void handle_zero_crossing(TIM_HandleTypeDef *htim);
 void handle_undershoot(TIM_HandleTypeDef *htim);
@@ -75,7 +71,6 @@ extern void motor_control_task(/*void *argument*/);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-extern osThreadId_t motor_control_hndl;
 extern TIM_HandleTypeDef htim3;
 extern volatile GPIO_PinState cmp1, cmp2, cmp3;
 volatile GPIO_PinState old_cmp1, old_cmp2, old_cmp3;
