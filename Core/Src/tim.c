@@ -43,10 +43,7 @@ void MX_TIM1_Init(void)
   TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
   /* USER CODE BEGIN TIM1_Init 1 */
-  // htim1.Init.Period = 3199; // 20khz
   htim1.Init.Period = 2123; // 30khz
-  // htim1.Init.Period = 1800; // 40khz
-  // htim1.Init.Period = 1600; // 40khz
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;

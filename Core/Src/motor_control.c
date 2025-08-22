@@ -1,6 +1,4 @@
 #include "motor_control.h"
-#include "cmsis_os.h" // For osDelay
-#include "main.h"
 #include "tim.h"
 #include <stdint.h>
 
@@ -22,8 +20,6 @@ void set_pwm_duty_cycle(phase_channel_t phase, uint32_t per10k) {
 
 static void pwm_comp(phase_channel_t phase, uint32_t duty_cycle) {
   set_pwm_duty_cycle(phase, duty_cycle);
-  // HAL_TIM_PWM_Start(&htim1, phase);
-  // HAL_TIMEx_PWMN_Start(&htim1, phase);
   switch (phase) {
 
   case PHASE_A:
@@ -44,8 +40,6 @@ static void pwm_lo(phase_channel_t phase) { pwm_comp(phase, 0); }
 static void pwm_hi(phase_channel_t phase) { pwm_comp(phase, 10000); }
 
 static void pwm_off(phase_channel_t phase) {
-  // HAL_TIM_PWM_Stop(&htim1, phase);
-  // HAL_TIMEx_PWMN_Stop(&htim1, phase);
   switch (phase) {
   case PHASE_A: // Corresponds to TIM_CHANNEL_1
     TIM1->CCER &= ~(TIM_CCER_CC1E | TIM_CCER_CC1NE);
@@ -59,56 +53,32 @@ static void pwm_off(phase_channel_t phase) {
   }
   TIM1->BDTR &= ~( TIM_BDTR_MOE );
   TIM1->CR1 &= ~( TIM_CR1_CEN );
-    // __HAL_TIM_MOE_DISABLE(htim);
-    // __HAL_TIM_DISABLE(htim);
 }
 
 void motor_init(void) {
-  // Ensure all phases are off initially
   pwm_off(PHASE_A);
   pwm_off(PHASE_B);
   pwm_off(PHASE_C);
 
-  // setup for step 5
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
+  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
 
   // Start the master timer counter
-  // HAL_TIM_Base_Start(&htim1);
-  HAL_TIM_Base_Start_IT(&htim1); // for period elapsed
-  // HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_1); // for PWM pulse finished
+  HAL_TIM_Base_Start_IT(&htim1);
 }
 
-// void motor_align(void) {
-//   // Energize the rotor into a known position (step 5)
-//   // osDelay is acceptable here as it's a one-time, non-real-time operation.
-//   motor_step(MOTOR_STEP_5, STARTUP_DUTY_CYCLE);
-//   osDelay(1000);
-//   motor_step(MOTOR_STEP_6, STARTUP_DUTY_CYCLE);
-//   osDelay(1000);
-// }
 // (0, 0, 1): 1,
 // (1, 0, 1): 2,
 // (1, 0, 0): 3,
 // (1, 1, 0): 4,
 // (0, 1, 0): 5,
 // (0, 1, 1): 6
-//
-//
-// ljubicasto h1
-// plavi h2
-// zuti h3
 
 void motor_step(motor_step_t step, uint32_t duty_cycle) {
-  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-  // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
   switch (step) {
   case MOTOR_STEP_1: // A->B, C is floating ---> down
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
     pwm_off(PHASE_C);
     pwm_lo(PHASE_B);
     pwm_comp(PHASE_A, duty_cycle);
@@ -116,16 +86,12 @@ void motor_step(motor_step_t step, uint32_t duty_cycle) {
 
   case MOTOR_STEP_2: // A->C, B is floating ----> up
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
     pwm_off(PHASE_B);
     pwm_lo(PHASE_C);
     pwm_comp(PHASE_A, duty_cycle);
     break;
 
   case MOTOR_STEP_3: // B->C, A is floating -----> down
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
     pwm_off(PHASE_A);
     pwm_lo(PHASE_C);
@@ -133,9 +99,7 @@ void motor_step(motor_step_t step, uint32_t duty_cycle) {
     break;
 
   case MOTOR_STEP_4: // B->A, C is floating ----> up
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
     pwm_off(PHASE_C);
     pwm_lo(PHASE_A);
     pwm_comp(PHASE_B, duty_cycle);
@@ -143,16 +107,12 @@ void motor_step(motor_step_t step, uint32_t duty_cycle) {
 
   case MOTOR_STEP_5: // C->A, B is floating -----> down
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
     pwm_off(PHASE_B);
     pwm_lo(PHASE_A);
     pwm_comp(PHASE_C, duty_cycle);
     break;
 
   case MOTOR_STEP_6: // C->B, A is floating ----> up
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
-    // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
     pwm_off(PHASE_A);
     pwm_lo(PHASE_B);
@@ -183,8 +143,6 @@ void set_commutation_period_us_63(uint32_t period_us) {
     period_us = 65535;
   }
 
-  // A very short period can be unstable. Enforce a practical minimum.
-  // For example, 50us corresponds to a commutation frequency of 20kHz.
   const uint32_t MINIMUM_PERIOD_US = 50;
   if (period_us < MINIMUM_PERIOD_US) {
     period_us = MINIMUM_PERIOD_US;
