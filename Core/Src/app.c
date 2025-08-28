@@ -1,22 +1,3 @@
-/* USER CODE BEGIN Header */
-/**
- ******************************************************************************
- * File Name          : app_freertos.c
- * Description        : Code for freertos applications
- ******************************************************************************
- * @attention
- *
- * Copyright (c) 2025 STMicroelectronics.
- * All rights reserved.
- *
- * This software is licensed under terms that can be found in the LICENSE file
- * in the root directory of this software component.
- * If no LICENSE file comes with this software, it is provided AS-IS.
- *
- ******************************************************************************
- */
-/* USER CODE END Header */
-
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
@@ -28,7 +9,6 @@
 #include "stm32g071xx.h"
 #include "stm32g0xx_hal_gpio.h"
 #include "stm32g0xx_hal_tim.h"
-#include "timer_utils.h"
 #include <stdint.h>
 #include <stdio.h>
 /* USER CODE END Includes */
@@ -40,48 +20,24 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define PERIOD 200
-#define DUTY_CYCLE 1150
-#define KI 0.01f
-#define KP 5
+#define DUTY_CYCLE 1300
+// #define KI 0.01f
+#define KI 0.006f
+#define KP 4
 #define ZC_CNT_MIN 3
-#define DT 0.005f
 #define COEF_HALF 0.375f
-#define DUTY_MIN 1050
-#define DUTY_MAX 8000
+#define DUTY_MIN 1300
+#define DUTY_MAX 7000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 const uint32_t step_times_us[] = {
-    34500, 14291, 10966, 9244, 8144, 7363, 6771, 6302, 5919, 5599, 5325, 5088,
-    4880,  4696,  4531,  4382, 4247, 4124, 4011, 3907, 3810, 3721, 3637, 3559,
-    3485,  3416,  3351,  3290, 3231, 3176, 3124, 3074, 3026, 2980, 2937, 2895,
-    2855,  2817,  2780,  2745, 2711, 2678, 2646, 2616, 2586, 2557, 2530, 2503,
-    2477,  2452,  2427,  2404, 2381, 2358, 2337, 2316, 2295, 2275, 2255, 2236,
-    2218,  2200,  2182,  2165, 2148, 2131, 2115, 2100, 2084, 2069, 2054, 2040,
-    2026,  2012,  1999,  1985, 1972, 1960, 1947, 1935, 1923, 1911, 1899, 1888,
-    1877,  1866,  1855,  1844, 1834, 1823, 1813, 1803, 1794, 1784, 1775, 1765,
-    1756,  1747,  1738,  1729, 1721, 1712, 1704, 1696, 1687, 1679, 1672, 1664,
-    1656,  1648,  1641,  1634, 1626, 1619, 1612, 1605, 1598, 1591, 1585, 1578,
-    1571,  1565,  1559,  1552, 1546, 1540, 1534, 1528, 1522, 1516, 1510, 1504,
-    1499,  1493,  1487,  1482, 1476, 1471, 1466, 1461, 1455, 1450, 1445, 1440,
-    1435,  1430,  1425,  1420, 1416, 1411, 1406, 1401, 1397, 1392, 1388, 1383,
-    1379,  1375,  1370,  1366, 1362, 1357, 1353, 1349, 1345, 1341, 1337, 1333,
-    1329,  1325,  1321,  1317, 1313, 1310, 1306, 1302, 1298, 1295, 1291, 1288,
-    1284,  1280,  1277,  1273, 1270, 1267, 1263, 1260, 1256, 1253, 1250, 1247,
-    1243,  1240,  1237,  1234, 1231, 1227, 1224, 1221, 1218, 1215, 1212, 1209,
-    1206,  1203,  1200,  1198, 1195, 1192, 1189, 1186, 1183, 1181, 1178, 1175,
-    1172,  1170,  1167,  1164, 1162, 1159, 1156, 1154, 1151, 1149, 1146, 1144,
-    1141,  1139,  1136,  1134, 1131, 1129, 1126, 1124, 1122, 1119, 1117, 1115,
-    1112,  1110,  1108,  1105, 1103, 1101, 1099, 1096, 1094, 1092, 1090, 1088,
-    1086,  1083,  1081,  1079, 1077, 1075, 1073, 1071, 1069, 1067, 1065, 1063,
-    1061,  1059,  1057,  1055, 1053, 1051, 1049, 1047, 1045, 1043, 1041, 1039,
-    1037,  1036,  1034,  1032, 1030, 1028, 1026, 1025, 1023, 1021, 1019, 1017,
-    1016,  1014,  1012,  1010, 1009, 1007, 1005, 1003, 1002, 1000, 998,  997,
-    995,   993,   992,   990,  989,  987,  985,  984,  982,  981,  979,  977,
-    976,   974,   973,   971,  970,  968,  967,  965,  964,  962,  961,  959,
-    958,   956,   955,   953,  952,  950,  949,  947,  946,  945,  943,  942,
+    34500, 14291, 10966, 9244, 8144, 7363, 6771, 6302, 5919, 5599, 5325,
+    5088, 4880,  4696,  4531,  4382, 4247, 4124, 4011, 3907, 3810, 3721,
+    3637, 3559, 3485,  3416,  3351,  3290, 3231, 3176, 3124, 3074, 3026,
+    2980, 2937, 2895, 2855,  2817,  2780,  2745, 2711, 2678, 2646, 2616,
+    2586, 2557, 2530, 2503, 2477,  2452,  2427,  2404, 2381, 2358, 2337,
 };
 extern volatile GPIO_PinState cmp1, cmp2, cmp3;
 extern volatile uint8_t safeguard;
@@ -97,7 +53,7 @@ extern UART_HandleTypeDef huart2;
 extern uint8_t rx_buf[2];
 extern uint8_t tx_buf[2];
 
-uint32_t open_loop_period_us = ALIGN_TIMEOUT_US;
+uint32_t open_loop_period_us = 65000;
 volatile motor_step_t current_motor_step = MOTOR_STEP_4;
 volatile uint8_t go = 0;
 volatile uint8_t running = 0;
@@ -148,7 +104,6 @@ void transmit_current_speed(uint16_t speed) {
 }
 /* USER CODE END FunctionPrototypes */
 
-
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 
@@ -182,7 +137,8 @@ void motor_control_task(/*void *argument*/) {
   uint32_t step_counter = 0;
   motor_init();
 
-  set_commutation_period_us_255(open_loop_period_us);
+  // Set the new Auto-Reload Register value for TIM3.
+  __HAL_TIM_SET_AUTORELOAD(&htim3, open_loop_period_us);
   HAL_TIM_Base_Start_IT(&htim3);
   int32_t Kp_Q12 = (int32_t)(KP * (1 << Q));
   int32_t Ki_Q12 = (int32_t)(KI * (1 << Q));
@@ -385,9 +341,9 @@ void motor_control_task(/*void *argument*/) {
           break;
         }
       }
-      state = BEMF_ERROR;
-      safeguard = 0;
-      pwm_cnt = 0;
+      // state = BEMF_ERROR;
+      // safeguard = 0;
+      // pwm_cnt = 0;
       current_motor_step =
           (motor_step_t)((current_motor_step + 1) % MOTOR_STEP_COUNT);
       motor_step(current_motor_step, duty_cycle);
