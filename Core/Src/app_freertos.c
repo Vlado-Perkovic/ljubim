@@ -45,11 +45,11 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PERIOD 200
-#define DUTY_CYCLE 1150
+#define DUTY_CYCLE 1300
 #define KI 0.01f
-#define KP 5
+#define KP 6
 #define ZC_CNT_MIN 3
-#define DT 0.005f
+#define DT 0.05f
 #define COEF_HALF 0.375f
 // #define COEF_HALF 0.4f
 /* USER CODE END PD */
@@ -305,7 +305,7 @@ void motor_control_task(void *argument) {
   int32_t Kd_Q12 = 0;
 
   PID_init(&spid, Kp_Q12, Ki_Q12, Kd_Q12, DUTY_MAX);
-  // HAL_TIM_Base_Start_IT(&htim17);
+  HAL_TIM_Base_Start_IT(&htim17);
   HAL_UART_Receive_DMA(&huart2, rx_buf, 2); // expecting 2 bytes
   // HAL_COMP_Start(&hcomp1);
   int cnt = 0;
@@ -656,10 +656,10 @@ void motor_control_task(void *argument) {
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       //   HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_8);
       // }
-      if (step_counter > 600 &&
-          step_counter % 3 == 0 && duty_cycle < 8500) {
-        duty_cycle += 5;
-      }
+      // if (step_counter > 600 &&
+      //     step_counter % 3 == 0 && duty_cycle < 8500) {
+      //   duty_cycle += 5;
+      // }
       // if (step_counter > 1000 ) {
       //   target_speed = 1500;
       // }
