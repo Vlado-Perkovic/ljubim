@@ -11,6 +11,6 @@ typedef struct {
 } queue_t;
 
 
-void queue_put(queue_t* q, uint32_t x);
+void queue_put(volatile queue_t* q, uint32_t x);
 
 #endif

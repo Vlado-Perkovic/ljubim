@@ -108,7 +108,6 @@ void transmit_current_speed(uint16_t speed) {
 /* USER CODE BEGIN Application */
 
 void motor_handle_bemf() {
-  int32_t err;
 
   if (state == BEMF_OVERSHOOT) {
     /* INCREASE PERIOD */
@@ -147,8 +146,6 @@ void motor_control_task(/*void *argument*/) {
   PID_init(&spid, Kp_Q12, Ki_Q12, Kd_Q12, DUTY_MAX, DUTY_MIN);
   HAL_TIM_Base_Start_IT(&htim17);
   HAL_UART_Receive_DMA(&huart2, rx_buf, 2); // expecting 2 bytes
-  int cnt = 0;
-  uint32_t err;
 
   for (;;) {
     if (undershoot_flag == 1) {

@@ -83,6 +83,7 @@ volatile uint8_t PI_flag = 0;
 volatile uint8_t pwm_cnt = 0;
 
 int _write(int file, char *ptr, int len) {
+  (void)file;
   HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, HAL_MAX_DELAY);
   return len;
 }

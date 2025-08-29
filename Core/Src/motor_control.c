@@ -37,7 +37,6 @@ static void pwm_comp(phase_channel_t phase, uint32_t duty_cycle) {
 }
 
 static void pwm_lo(phase_channel_t phase) { pwm_comp(phase, 0); }
-static void pwm_hi(phase_channel_t phase) { pwm_comp(phase, 10000); }
 
 static void pwm_off(phase_channel_t phase) {
   switch (phase) {
